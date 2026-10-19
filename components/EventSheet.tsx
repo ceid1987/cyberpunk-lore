@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, animate, motion, useDragControls, useMotionValue } from "framer-motion";
+import { AnimatePresence, animate, motion, useDragControls, useMotionValue, useTransform } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { eventById, startHere, type Event, type Relation } from "@/data";
 import { PANEL_W, PEEK, useFilteredEvents, useIsHidden, useStore, usePrefersReducedMotion } from "@/lib/store";
@@ -73,6 +73,8 @@ export default function EventSheet() {
   const y = useMotionValue(fullH);
   const [expanded, setExpanded] = useState(false);
   const controls = useDragControls();
+  // Keep the mobile footer (prev / next) on screen while the sheet only peeks.
+  const footerY = useTransform(y, (v) => -Math.max(0, Math.min(v, peekY)));
   const isOpen = !!e;
   useEffect(() => {
     if (desktop || !isOpen) return;
@@ -98,7 +100,10 @@ export default function EventSheet() {
   };
 
   const bodyRef = useRef<HTMLDivElement>(null);
-  useEffect(() => bodyRef.current?.scrollTo({ top: 0 }), [e?.id]);
+  useEffect(() => {
+    // Braces matter: newer Chrome returns a Promise from scrollTo, which React would treat as a cleanup.
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+  }, [e?.id]);
 
   const spoilerGate = e ? isHidden(e) : false;
 
@@ -278,7 +283,9 @@ export default function EventSheet() {
             </button>
             {header}
             {body}
-            {footer}
+            <motion.div className="relative z-10 shrink-0 bg-bg-2" style={{ y: footerY }}>
+              {footer}
+            </motion.div>
           </motion.aside>
         ))}
     </AnimatePresence>

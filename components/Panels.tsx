@@ -65,7 +65,9 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
   const isHidden = useIsHidden();
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const results = useMemo(() => {
     const terms = normalize(q).split(/\s+/).filter(Boolean);
