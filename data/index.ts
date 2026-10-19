@@ -29,9 +29,20 @@ const raw: LoreEvent[] = [
 
 const META = meta as Record<string, { media: Event["media"]; image?: Event["image"] }>;
 
-/** Every event, sorted chronologically, with media tags, image and map group. */
+// Plot events of Phantom Liberty that sit outside the "phantom-liberty" map group.
+const PL_PLOT = new Set(["songbird-recruited", "song-so-mi-born"]);
+
+/** Whose story an event spoils. Lore that merely appears in a work (Arasaka, NetWatch...) spoils nothing. */
+function spoilsOf(e: LoreEvent, group?: string): Event["spoils"] {
+  if (group === "phantom-liberty" || PL_PLOT.has(e.id)) return "phantom-liberty";
+  if (e.canonSource === "edgerunners" && e.sortYear >= 2073) return "edgerunners";
+  if (e.spoilerLevel === "game-spoiler") return "2077";
+  return undefined;
+}
+
+/** Every event, sorted chronologically, with media tags, image, map group and spoiler scope. */
 export const events: Event[] = raw
-  .map((e) => ({ ...e, media: META[e.id]?.media ?? [], image: META[e.id]?.image, group: groupOf[e.id] }))
+  .map((e) => ({ ...e, media: META[e.id]?.media ?? [], image: META[e.id]?.image, group: groupOf[e.id], spoils: spoilsOf(e, groupOf[e.id]) }))
   .sort((a, b) => a.sortYear - b.sortYear);
 
 export const eventById: Record<string, Event> = Object.fromEntries(events.map((e) => [e.id, e]));

@@ -3,18 +3,20 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { animate } from "framer-motion";
 import { clusterById, eras, events as allEvents, eventById, type Event } from "@/data";
-import { tierAllowed, useFilteredEvents, useIsHidden, useStore, usePanelInset, usePrefersReducedMotion, type TierLevel } from "@/lib/store";
-import { ClusterBadge, Icon, TagRow, tierSize } from "./ui";
+import { useFilteredEvents, useIsHidden, useStore, usePanelInset, usePrefersReducedMotion } from "@/lib/store";
+import { ClusterBadge, ClusterIcon, Icon, SPOIL_LABEL, TagRow, tierSize } from "./ui";
 
 // ---------------------------------------------------------------------------
 // Horizontal, zoomable timeline.
 //  * x axis is time. Each era gets a width proportional to how many events it
 //    holds, so the dense 1990-2077 stretch isn't squeezed by the empty 1800s.
 //  * Pinch / wheel zooms the time axis; drag pans in both directions.
-//  * Detail follows zoom: landmarks first, then major, then minor events;
-//    cards grow from compact to full (with image) as space allows.
-//  * Cards are placed greedily in rows above and below the line; anything that
-//    doesn't fit stays as a dot on the line until you zoom in further.
+//  * Every event is always a dot on the line. Cards follow zoom: none when the
+//    whole line is in view, then landmarks, then major, then minor events.
+//    Compact cards (date, theme, title) become full cards (image, tags) when
+//    zoomed in far enough.
+//  * Cards are packed into rows above and below the line in world space, so
+//    panning or selecting never reshuffles them; only zooming does.
 // ---------------------------------------------------------------------------
 
 const START = 1855;
@@ -24,7 +26,9 @@ const ROW_GAP = 10;
 const MAX_ROWS = 6; // per side
 
 type Mode = "compact" | "full";
-const CARD = { compact: { w: 176, h: 100 }, full: { w: 228, h: 196 } } as const;
+const IMG_H = 104;
+const CARD = { compact: { w: 184, h: 64 }, full: { w: 232, h: 118 } } as const;
+const cardSize = (mode: Mode, img: boolean) => (mode === "full" && img ? { w: CARD.full.w, h: CARD.full.h + IMG_H } : CARD[mode]);
 
 // ---- piecewise-linear time scale
 const ERA_W = (() => {
@@ -37,19 +41,19 @@ const ERA_W = (() => {
   });
 })();
 let acc = 0;
-const SEGS = ERA_W.map((seg) => {
+export const SEGS = ERA_W.map((seg) => {
   const x0 = acc;
   acc += seg.w;
   return { ...seg, x0, x1: acc };
 });
-const WORLD_W = acc;
+export const WORLD_W = acc;
 
 export function yearToX(y: number) {
   const seg = SEGS.find((s) => y >= s.s && y < s.e) ?? (y < START ? SEGS[0] : SEGS[SEGS.length - 1]);
   const f = Math.max(0, Math.min(1, (y - seg.s) / (seg.e - seg.s)));
   return seg.x0 + f * seg.w;
 }
-function xToYear(x: number) {
+export function xToYear(x: number) {
   const seg = SEGS.find((s) => x >= s.x0 && x < s.x1) ?? (x < 0 ? SEGS[0] : SEGS[SEGS.length - 1]);
   return seg.s + ((x - seg.x0) / seg.w) * (seg.e - seg.s);
 }
@@ -60,7 +64,10 @@ export interface TimelineHandle {
 
 type T = { k: number; x: number; y: number };
 
-const TIER_ZOOM: Record<number, number> = { 0: 1, 1: 2.6, 2: 6.5 };
+/** Zoom (relative to "whole line fits") at which each tier gets cards. Below the first, only dots. */
+const CARD_ZOOM = { landmark: 1.7, major: 3.4, minor: 7 } as const;
+const FULL_ZOOM = 13;
+const RANK = { landmark: 0, major: 1, minor: 2 } as const;
 
 const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function TimelineView({ hidden }, ref) {
   const { state, dispatch } = useStore();
@@ -98,40 +105,50 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
   }, [size, k0]);
 
   const z = t.k / k0;
-  const tierLevel: TierLevel = z >= TIER_ZOOM[2] ? 2 : z >= TIER_ZOOM[1] ? 1 : 0;
-  const mode: Mode = z >= 11 ? "full" : "compact";
-  const card = CARD[mode];
+  const mode: Mode = z >= FULL_ZOOM ? "full" : "compact";
+  const card = cardSize(mode, state.showImages);
   const lineY = size.h * 0.5 + t.y;
 
   const toX = (wx: number) => wx * t.k + t.x;
 
-  // ---- which events, and where their cards go
-  const layout = useMemo(() => {
-    const margin = size.w * 0.6;
-    const visible = filtered.filter((e) => tierAllowed(e.tier, tierLevel)).map((e) => ({ e, px: yearToX(e.sortYear) * t.k + t.x }));
-    const inView = visible.filter((v) => v.px > -margin && v.px < size.w + margin);
-    const rank = (e: Event) => (e.tier === "landmark" ? 0 : e.tier === "major" ? 1 : 2);
-    const order = [...inView].sort((a, b) => rank(a.e) - rank(b.e) || (a.e.id === state.selectedId ? -1 : b.e.id === state.selectedId ? 1 : 0) || a.e.sortYear - b.e.sortYear);
-    // As many rows as fit on screen above and below the line (top band reserved for era names).
+  // ---- card packing, in world space so it only changes with zoom.
+  // Zoom is quantised (about 3% steps) so packing doesn't churn every frame.
+  const kq = Math.round(Math.log(t.k) * 32);
+  const packing = useMemo(() => {
+    const k = Math.exp(kq / 32);
+    const zz = k / k0;
     const perSide = Math.max(1, Math.min(MAX_ROWS, Math.floor((size.h / 2 - LINE_PAD - 44) / (card.h + ROW_GAP))));
+    const order = filtered.filter((e) => zz >= CARD_ZOOM[e.tier]).sort((a, b) => RANK[a.tier] - RANK[b.tier] || a.sortYear - b.sortYear);
+    const halfW = (card.w / 2 + 8) / k; // world units
     const rows: { x0: number; x1: number }[][] = Array.from({ length: perSide * 2 }, () => []);
-    const placed: { e: Event; px: number; left: number; top: number; side: 1 | -1 }[] = [];
-    for (const v of order) {
-      const left = v.px - card.w / 2;
-      const iv = { x0: left - 8, x1: left + card.w + 8 };
-      for (let r = 0; r < perSide * 2; r++) {
-        const row = rows[r];
-        if (row.some((o) => o.x0 < iv.x1 && iv.x0 < o.x1)) continue;
-        row.push(iv);
-        const level = Math.floor(r / 2);
-        const side: 1 | -1 = r % 2 === 0 ? -1 : 1;
-        const top = side === -1 ? -(LINE_PAD + (level + 1) * card.h + level * ROW_GAP) : LINE_PAD + level * (card.h + ROW_GAP);
-        placed.push({ e: v.e, px: v.px, left, top, side });
+    const out: { e: Event; wx: number; r: number }[] = [];
+    for (const e of order) {
+      const wx = yearToX(e.sortYear);
+      const iv = { x0: wx - halfW, x1: wx + halfW };
+      for (let r = 0; r < rows.length; r++) {
+        if (rows[r].some((o) => o.x0 < iv.x1 && iv.x0 < o.x1)) continue;
+        rows[r].push(iv);
+        out.push({ e, wx, r });
         break;
       }
     }
-    return { dots: inView, placed };
-  }, [filtered, tierLevel, t.k, t.x, size.w, size.h, card.w, card.h, state.selectedId]);
+    return out;
+  }, [filtered, kq, k0, size.h, card.w, card.h]);
+
+  const layout = useMemo(() => {
+    const margin = card.w;
+    const dots = filtered.map((e) => ({ e, px: yearToX(e.sortYear) * t.k + t.x })).filter((v) => v.px > -40 && v.px < size.w + 40);
+    const placed: { e: Event; px: number; left: number; top: number; side: 1 | -1 }[] = [];
+    for (const p of packing) {
+      const px = p.wx * t.k + t.x;
+      if (px < -margin || px > size.w + margin) continue;
+      const level = Math.floor(p.r / 2);
+      const side: 1 | -1 = p.r % 2 === 0 ? -1 : 1;
+      const top = side === -1 ? -(LINE_PAD + (level + 1) * card.h + level * ROW_GAP) : LINE_PAD + level * (card.h + ROW_GAP);
+      placed.push({ e: p.e, px, left: px - card.w / 2, top, side });
+    }
+    return { dots, placed };
+  }, [filtered, packing, t.k, t.x, size.w, card.w, card.h]);
 
   // ---- interaction
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -208,8 +225,11 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
     if (ev.key === "ArrowRight") setT((c) => ({ ...c, x: c.x - 80 }));
     if (ev.key === "ArrowUp") setT((c) => ({ ...c, y: c.y + 60 }));
     if (ev.key === "ArrowDown") setT((c) => ({ ...c, y: c.y - 60 }));
-    if (ev.key === "+" || ev.key === "=") zoomAt(1.4, size.w / 2);
-    if (ev.key === "-") zoomAt(1 / 1.4, size.w / 2);
+    // Zoom around the middle of the part of the screen not covered by the detail panel.
+    const mid = insetRef.current.left + (size.w - insetRef.current.left) / 2;
+    if (ev.key === "+" || ev.key === "=") zoomAt(1.4, mid);
+    if (ev.key === "-") zoomAt(1 / 1.4, mid);
+    if (ev.key === "0") animateTo({ k: k0, x: 20, y: 0 });
   };
 
   const animateTo = useCallback(
@@ -227,7 +247,7 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
     const e = eventById[state.selectedId];
     if (!e) return;
     const cur = tRef.current;
-    const need = TIER_ZOOM[e.tier === "landmark" ? 0 : e.tier === "major" ? 1 : 2] * k0 * 1.05;
+    const need = CARD_ZOOM[e.tier] * k0 * 1.05;
     const k = Math.max(cur.k, need);
     const wx = yearToX(e.sortYear);
     const { left, bottom } = insetRef.current;
@@ -272,7 +292,6 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t.k, t.x, size.w]);
 
-  const levelLabel = tierLevel === 0 ? "Landmarks" : tierLevel === 1 ? "Landmarks + major" : "All events";
 
   return (
     <div
@@ -287,7 +306,7 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
       onKeyDown={onKeyDown}
       tabIndex={0}
       role="region"
-      aria-label="Timeline. Drag to move, pinch or use the zoom buttons to see more events."
+      aria-label="Timeline. Drag to move, pinch or scroll to zoom in and see event cards."
       aria-hidden={hidden}
       onClickCapture={(ev) => {
         if (suppressClick.current) {
@@ -376,22 +395,6 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
         <EventCard key={p.e.id} e={p.e} mode={mode} left={p.left} top={lineY + p.top} />
       ))}
 
-      {/* zoom controls + detail level */}
-      <div className="absolute bottom-24 right-2 flex flex-col gap-1.5" onPointerDown={(ev) => ev.stopPropagation()}>
-        <ZoomBtn label="Zoom in" onClick={() => zoomAt(1.6, size.w / 2)}>
-          <Icon name="plus" size={18} />
-        </ZoomBtn>
-        <ZoomBtn label="Zoom out" onClick={() => zoomAt(1 / 1.6, size.w / 2)}>
-          <Icon name="minus" size={18} />
-        </ZoomBtn>
-        <ZoomBtn label="Show the whole timeline" onClick={() => animateTo({ k: k0, x: 20, y: 0 })}>
-          <Icon name="fit" size={18} />
-        </ZoomBtn>
-      </div>
-      <div className="pointer-events-none absolute bottom-24 left-2 border border-line bg-bg/85 px-2 py-1 font-display text-[10.5px] uppercase tracking-wider text-ink-3" aria-live="polite">
-        {levelLabel} · {Math.floor(xToYear((size.w / 2 - t.x) / t.k))}
-      </div>
-
       {filtered.length === 0 && (
         <div className="absolute inset-x-0 top-1/3 text-center text-ink-2">
           No events match these filters.{" "}
@@ -406,50 +409,52 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
 
 export default TimelineView;
 
-function ZoomBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button type="button" aria-label={label} title={label} onClick={onClick} className="cp-btn grid h-10 w-10 place-items-center border border-line bg-bg/85 text-ink backdrop-blur-sm hover:border-cyan">
-      {children}
-    </button>
-  );
-}
-
 function EventCard({ e, mode, left, top }: { e: Event; mode: Mode; left: number; top: number }) {
   const { state, dispatch } = useStore();
   const isHidden = useIsHidden();
   const hid = isHidden(e);
   const c = clusterById[e.cluster];
-  const { w, h } = CARD[mode];
+  const full = mode === "full";
+  const withImg = full && state.showImages;
+  const { w, h } = cardSize(mode, state.showImages);
   const selected = state.selectedId === e.id;
-  const showImg = mode === "full" && state.showImages && !!e.image && !hid;
+  const border = selected ? "#05d9e8" : hid ? "#2e2e3e" : c.color + "66";
   return (
     <button
       type="button"
       onClick={() => (hid ? dispatch({ type: "reveal", id: e.id }) : dispatch({ type: "select", id: e.id }))}
-      aria-label={hid ? `Hidden 2077 spoiler, ${e.inWorldDate}. Activate to reveal.` : `${e.title}, ${e.inWorldDate}`}
-      className={`cp-card absolute overflow-hidden border text-left transition-colors ${selected ? "bg-[#10202a]" : "bg-panel/95 hover:bg-[#171724]"}`}
-      style={{ left, top, width: w, height: h, borderColor: selected ? "#05d9e8" : hid ? "#2e2e3e" : c.color + "66", borderLeft: `3px solid ${hid ? "#3a3a4a" : c.color}`, ["--b" as string]: selected ? "#05d9e8" : hid ? "#2e2e3e" : c.color + "66" }}
+      aria-label={hid ? `Hidden spoiler, ${e.inWorldDate}. Activate to reveal.` : `${e.title}, ${e.inWorldDate}`}
+      className={`cp-card absolute flex flex-col overflow-hidden border text-left transition-colors ${selected ? "bg-[#10202a]" : "bg-panel/95 hover:bg-[#171724]"}`}
+      style={{ left, top, width: w, height: h, borderColor: border, borderLeft: `3px solid ${hid ? "#3a3a4a" : c.color}`, ["--b" as string]: border }}
     >
-      {showImg && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <div className="h-[82px] w-full bg-black">
-          <img src={e.image!.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-contain opacity-90" draggable={false} onError={(ev) => ((ev.currentTarget.parentElement as HTMLElement).style.display = "none")} />
+      {withImg && (
+        <div className="relative grid w-full shrink-0 place-items-center overflow-hidden border-b border-line/60 bg-black" style={{ height: IMG_H }}>
+          {e.image && !hid ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={e.image.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-contain opacity-90" draggable={false} onError={(ev) => (ev.currentTarget.style.visibility = "hidden")} />
+          ) : (
+            <span className="opacity-40">
+              <ClusterIcon id={e.cluster} size={30} />
+            </span>
+          )}
         </div>
       )}
-      <div className={`${hid ? "spoiler-blur" : ""} ${mode === "full" ? "p-2" : "px-2 py-1.5"}`} aria-hidden={hid}>
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 truncate font-display text-[10px] uppercase tracking-wider text-ink-3">{e.inWorldDate}</span>
+      <div className={`flex min-h-0 flex-1 flex-col px-2.5 py-2 ${hid ? "spoiler-blur" : ""}`} aria-hidden={hid}>
+        <div className="flex h-[14px] items-center justify-between gap-2">
+          <span className="min-w-0 truncate font-display text-[10px] uppercase leading-none tracking-wider text-ink-3">{e.inWorldDate}</span>
           <ClusterBadge id={e.cluster} small />
         </div>
-        <div className={`font-display font-bold leading-[1.15] text-ink ${mode === "full" ? "line-clamp-2 text-[14px]" : "line-clamp-2 text-[12.5px]"}`}>{hid ? "Hidden spoiler event" : e.title}</div>
-        <div className="mt-1">
-          <TagRow e={e} small hidden={hid} />
-        </div>
+        <div className={`mt-1 line-clamp-2 font-display font-bold leading-[1.2] text-ink ${full ? "h-[34px] text-[14px]" : "h-[30px] text-[12.5px]"}`}>{hid ? "Hidden spoiler event" : e.title}</div>
+        {full && (
+          <div className="mt-2 max-h-[38px] overflow-hidden">
+            <TagRow e={e} small hidden={hid} />
+          </div>
+        )}
       </div>
       {hid && (
         <div className="absolute inset-0 grid place-items-center bg-bg/40 font-display text-[11px] uppercase tracking-wider text-magenta">
           <span className="flex items-center gap-1.5">
-            <Icon name="eyeOff" size={14} /> 2077 spoiler
+            <Icon name="eyeOff" size={14} /> {e.spoils ? SPOIL_LABEL[e.spoils] : "Spoiler"}
           </span>
         </div>
       )}

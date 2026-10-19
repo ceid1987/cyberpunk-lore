@@ -73,6 +73,8 @@ export interface LoreEvent {
 /** An event with build-time extras merged in (see data/index.ts). */
 export interface Event extends LoreEvent {
   media: Media[];
+  /** Whose story this event spoils, if any. Appearing in a work is not the same as spoiling it. */
+  spoils?: Media;
   group?: string;
   image?: { thumb: string; file: string; page: string };
 }

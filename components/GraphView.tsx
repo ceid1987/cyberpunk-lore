@@ -136,7 +136,11 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
       const target = boxTarget(allBox());
       insetRef.current = saved;
       fitK.current = target.k;
-      anim ? animateTo(target) : setT(target);
+      if (anim) animateTo(target);
+      else {
+        cameraAnim.current?.stop(); // a running animation would otherwise overwrite this
+        setT(target);
+      }
     },
     [activeClusters, boxTarget, allBox, animateTo],
   );
@@ -348,6 +352,7 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
 
     // open-theme halos (explore) / present themes (museum)
     const haloClusters = museum ? activeClusters.filter((c) => revealed.some((e) => e.cluster === c.id)) : activeClusters.filter((c) => openC.has(c.id));
+    // In the museum only the current event's theme is named, so its label never fights the event's own.
     for (const c of haloClusters) {
       const b = CLUSTERS[c.id];
       const p = S(b.x, b.y);
@@ -362,7 +367,8 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
       ctx.fill();
       ctx.stroke();
       ctx.setLineDash([]);
-      const text = (zoomRel > 1.6 ? c.name : c.short).toUpperCase() + (museum ? "" : "  [ − ]");
+      if (museum && current?.cluster !== c.id) continue;
+      const text = (zoomRel > 1.6 && !museum ? c.name : c.short).toUpperCase() + (museum ? "" : "  [ − ]");
       ctx.font = `700 12px "Chakra Petch", sans-serif`;
       const tw = ctx.measureText(text).width;
       const lx = p.x - (tw + 18) / 2;
@@ -543,7 +549,8 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
           ctx.stroke();
         }
         const rank = e.tier === "landmark" ? 0 : e.tier === "major" ? 1 : 2;
-        const show = !hid && (rank <= (zoomRel > 4 ? 2 : zoomRel > 2 ? 1 : 0) || (neighbors && neighbors.has(d.id)) || (!museum && e.group && openG.has(e.group)));
+        // Museum: only the current event and what it links to get a label, to keep the small pane readable.
+        const show = !hid && (museum ? d.id === focus || !!neighbors?.has(d.id) : rank <= (zoomRel > 4 ? 2 : zoomRel > 2 ? 1 : 0) || (neighbors && neighbors.has(d.id)) || (e.group && openG.has(e.group)));
         if (show && ap.p > 0.6) labels.push({ text: e.title.length > 34 ? e.title.slice(0, 32) + "…" : e.title, x: p.x, y: p.y + r + 12, pri: (d.id === focus ? -10 : 0) + (neighbors?.has(d.id) ? -4 : 0) + rank + 1, strong: rank === 0 || d.id === focus, dim });
       }
     }
@@ -689,7 +696,9 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
     const p = local(ev);
     const now = Date.now();
     const hit = hitTest(p.x, p.y);
-    if (hit?.kind === "event") dispatch({ type: "select", id: hit.id });
+    if (hit?.kind === "event") {
+      if (!museum) dispatch({ type: "select", id: hit.id });
+    }
     else if (hit?.kind === "group") openGroup(hit.id);
     else if (hit?.kind === "cluster") openCluster(hit.id);
     else if (hit?.kind === "closeGroup") closeGroup(hit.id);
@@ -721,16 +730,7 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.selectedId, hidden]);
 
-  // Museum: select the current event and frame it with its already-revealed neighbours.
-  useEffect(() => {
-    if (!museum) return;
-    if (mIndex < 0 || !current) {
-      dispatch({ type: "select", id: null });
-      return;
-    }
-    if (state.selectedId !== current.id) dispatch({ type: "select", id: current.id });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [museum, mIndex]);
+  // Museum: frame the current event with its already-revealed neighbours.
   useEffect(() => {
     if (!museum || !current || !NODES[current.id]) return;
     const [x, y] = NODES[current.id];
@@ -740,13 +740,20 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
     const pts = [[x, y], ...revealed.filter((e) => linked.has(e.id) && NODES[e.id]).map((e) => NODES[e.id])];
     const pad = 70;
     const box = { x0: Math.min(...pts.map((p) => p[0])) - pad, y0: Math.min(...pts.map((p) => p[1])) - pad, x1: Math.max(...pts.map((p) => p[0])) + pad, y1: Math.max(...pts.map((p) => p[1])) + pad };
-    const desktop = size.w >= 768;
-    const target = boxTarget(box, fitK.current * 0.9, fitK.current * 4.5, { top: desktop ? 90 : 80, bottom: desktop ? 210 : 70, side: desktop ? 90 : 70, focus: [x, y] });
+    // The museum map is its own pane: only the floating view switch (desktop) overlaps it.
+    const desktop = window.innerWidth >= 768;
+    const target = boxTarget(box, fitK.current * 0.9, fitK.current * 4.5, { top: 34, bottom: desktop ? 96 : 24, side: desktop ? 60 : 36, focus: [x, y] });
     animateTo(target, 0.8);
     ensureLoop();
     // wait for the panel inset to settle (panel opens on first step)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [museum, current?.id, inset.left, inset.bottom]);
+  }, [museum, current?.id, size.w, size.h]);
+
+  // Pane resized (museum layout, fullscreen, leaving the museum) while nothing is focused: keep everything framed.
+  useEffect(() => {
+    if (size.w > 0 && (museum ? !current : openC.size === 0)) fitAll(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size.w, size.h]);
 
   // Entering / leaving museum mode.
   const prevMuseum = useRef(museum);
@@ -764,18 +771,6 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
     fitAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [museum]);
-
-  // Keyboard for museum.
-  useEffect(() => {
-    if (!museum || hidden) return;
-    const on = (ev: KeyboardEvent) => {
-      if ((ev.target as HTMLElement)?.tagName === "INPUT") return;
-      if (ev.key === "ArrowRight") dispatch({ type: "museum", active: true, index: Math.min(seq.length - 1, mIndex + 1) });
-      if (ev.key === "ArrowLeft") dispatch({ type: "museum", active: true, index: Math.max(0, mIndex - 1) });
-    };
-    window.addEventListener("keydown", on);
-    return () => window.removeEventListener("keydown", on);
-  }, [museum, hidden, mIndex, seq.length, dispatch]);
 
   useImperativeHandle(ref, () => ({
     positions(ids?: string[]) {
@@ -796,7 +791,6 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
   }));
 
   const anyOpen = openC.size > 0;
-  const year = current ? Math.floor(current.sortYear) : 1859;
 
   return (
     <div ref={wrapRef} className="absolute inset-0 overflow-hidden" aria-hidden={hidden}>
@@ -832,35 +826,8 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
         ))}
       </ul>
 
-      {/* museum: big year + intro */}
-      {museum && (
-        <div className="pointer-events-none absolute right-3 top-2 text-right md:top-3">
-          <div className="font-display text-[28px] md:text-[40px] font-bold leading-none tracking-wider text-white/90">{year}</div>
-          <div className="mt-1 font-display text-[10px] uppercase tracking-[0.2em] text-ink-3 md:text-[11px]">
-            {mIndex + 1} / {seq.length} events
-          </div>
-        </div>
-      )}
-      {museum && mIndex < 0 && (
-        <div className="pointer-events-none absolute inset-x-6 top-1/3 text-center">
-          <div className="font-display text-sm uppercase tracking-[0.3em] text-yellow">Museum mode</div>
-          <div className="mt-2 text-[15px] text-ink-2">Every event from 1859 to 2095, one at a time.</div>
-          <div className="mt-1 text-[13px] text-ink-3">Press the arrow to begin.</div>
-        </div>
-      )}
-
-      {/* controls */}
-      <div className="absolute right-2 flex flex-col gap-1.5" style={{ bottom: inset.bottom ? inset.bottom + 62 : 140 }}>
-        <MapBtn label="Zoom in" onClick={() => zoomAt(1.5, size.w / 2, size.h / 2)}>
-          <Icon name="plus" size={18} />
-        </MapBtn>
-        <MapBtn label="Zoom out" onClick={() => zoomAt(1 / 1.5, size.w / 2, size.h / 2)}>
-          <Icon name="minus" size={18} />
-        </MapBtn>
-        <MapBtn label="Show everything" onClick={() => fitAll()}>
-          <Icon name="fit" size={18} />
-        </MapBtn>
-        {!museum && (
+      {!museum && (
+        <div className="absolute flex items-end gap-1.5" style={{ bottom: inset.bottom ? inset.bottom + 12 : 84, left: inset.left + 8 }}>
           <MapBtn
             label={anyOpen ? "Close everything" : "Open every theme"}
             onClick={() => {
@@ -874,56 +841,16 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
           >
             <Icon name="layers" size={18} />
           </MapBtn>
-        )}
-      </div>
-
-      {/* museum toggle / stepper */}
-      <div className="pointer-events-none absolute flex justify-center [&>*]:pointer-events-auto" style={{ bottom: inset.bottom ? inset.bottom + 10 : 84, left: inset.left, right: 0 }}>
-        {museum ? (
-          <div className="cp-btn flex items-center gap-1 border border-yellow/60 bg-bg/90 p-1 backdrop-blur-md" style={{ ["--b" as string]: "#fcee0a99" }}>
-            <button type="button" onClick={() => dispatch({ type: "museum", active: false })} className="h-10 px-3 font-display text-[12px] uppercase tracking-wider text-ink-2 hover:text-ink">
-              Exit
-            </button>
-            <button type="button" aria-label="Previous event" disabled={mIndex <= 0} onClick={() => dispatch({ type: "museum", active: true, index: mIndex - 1 })} className="grid h-10 w-11 place-items-center text-ink disabled:opacity-30">
-              <Icon name="chevronL" />
-            </button>
-            <button
-              type="button"
-              aria-label="Next event"
-              disabled={mIndex >= seq.length - 1}
-              onClick={() => dispatch({ type: "museum", active: true, index: mIndex + 1 })}
-              className="grid h-10 w-14 place-items-center bg-yellow text-bg disabled:opacity-30"
-            >
-              <Icon name="chevronR" />
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              dispatch({ type: "select", id: null });
-              dispatch({ type: "museum", active: true, index: -1 });
-            }}
-            className="cp-btn flex h-10 items-center gap-2 border border-yellow/60 bg-bg/90 px-3 font-display text-[12px] font-bold uppercase tracking-wider text-yellow backdrop-blur-md hover:bg-yellow/10"
-            style={{ ["--b" as string]: "#fcee0a99" }}
-          >
-            <Icon name="museum" size={16} /> Museum mode
-          </button>
-        )}
-      </div>
-
-      {!museum && (
-        <div className="absolute" style={{ bottom: inset.bottom ? inset.bottom + 62 : 140, left: inset.left + 8 }}>
           <button
             type="button"
             onClick={() => setLegendOpen((o) => !o)}
             aria-expanded={legendOpen}
-            className="cp-btn border border-line bg-bg/85 px-2.5 py-1.5 font-display text-[11px] uppercase tracking-wider text-ink-2 backdrop-blur-sm"
+            className="cp-btn h-10 border border-line bg-bg/85 px-3 font-display text-[11px] uppercase tracking-wider text-ink-2 backdrop-blur-sm"
           >
             Legend
           </button>
           {legendOpen && (
-            <div className="cp-card absolute bottom-9 left-0 w-60 border border-line bg-bg/95 p-2.5 text-xs text-ink-2 backdrop-blur-sm">
+            <div className="cp-card absolute bottom-12 left-0 w-60 border border-line bg-bg/95 p-2.5 text-xs text-ink-2 backdrop-blur-sm">
               {(Object.keys(EDGE_STYLE) as Relation[]).map((r) => (
                 <div key={r} className="flex items-center gap-2 py-0.5">
                   <svg width="44" height="10" aria-hidden>

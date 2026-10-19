@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { clusterById, type ClusterId, type Event, type Media, type SpoilerLevel, type Tier } from "@/data";
+import { clusterById, type ClusterId, type Event, type Media, type Tier } from "@/data";
 
 export const MEDIA_LABEL: Record<Media, string> = {
   tabletop: "Tabletop",
@@ -11,13 +11,14 @@ export const MEDIA_LABEL: Record<Media, string> = {
 };
 export const MEDIA_COLOR: Record<Media, string> = { tabletop: "#ff8fb3", "2077": "#fcee0a", "phantom-liberty": "#ff9b3d", edgerunners: "#c8ff2e" };
 
-/** Spoiler tag shown on events. Edgerunners-safe and world events are both just "Lore". */
-export const SPOILER_LABEL: Record<SpoilerLevel, string> = {
-  "edgerunners-safe": "Lore",
-  world: "Lore",
-  "game-spoiler": "2077 Spoiler",
-};
-export const SPOILER_COLOR: Record<SpoilerLevel, string> = { "edgerunners-safe": "#05d9e8", world: "#05d9e8", "game-spoiler": "#ff2a6d" };
+/** Spoiler tag: "Lore" for events that spoil nothing, otherwise whose story they spoil. */
+export const SPOIL_LABEL: Record<Media, string> = { tabletop: "Lore", "2077": "2077 Spoiler", "phantom-liberty": "PL Spoiler", edgerunners: "Edgerunners Spoiler" };
+export const SPOIL_NAME: Record<Media, string> = { tabletop: "Tabletop", "2077": "Cyberpunk 2077", "phantom-liberty": "Phantom Liberty", edgerunners: "Edgerunners" };
+export const LORE_COLOR = "#05d9e8";
+export const SPOIL_COLOR = "#ff2a6d";
+export function spoilerTag(e: Event) {
+  return e.spoils ? { label: SPOIL_LABEL[e.spoils], color: SPOIL_COLOR } : { label: "Lore", color: LORE_COLOR };
+}
 
 export const TIER_LABEL: Record<Tier, string> = { landmark: "Landmark", major: "Major", minor: "Minor" };
 export const TIER_COLOR: Record<Tier, string> = { landmark: "#fcee0a", major: "#05d9e8", minor: "#a9a9c0" };
@@ -70,14 +71,14 @@ export function ClusterBadge({ id, small }: { id: ClusterId; small?: boolean }) 
 
 /** Importance, spoiler level, and the media an event appears in. */
 export function TagRow({ e, small, hidden }: { e: Event; small?: boolean; hidden?: boolean }) {
-  const spoiler = e.spoilerLevel === "game-spoiler";
+  const sp = spoilerTag(e);
   return (
     <div className={`flex flex-wrap items-center ${small ? "gap-1" : "gap-1.5"}`}>
       <Tag color={TIER_COLOR[e.tier]} small={small}>
         {TIER_LABEL[e.tier]}
       </Tag>
-      <Tag color={SPOILER_COLOR[e.spoilerLevel]} small={small}>
-        {spoiler ? "2077 Spoiler" : "Lore"}
+      <Tag color={sp.color} small={small}>
+        {sp.label}
       </Tag>
       {!hidden &&
         e.media.map((m) => (
@@ -93,7 +94,7 @@ export function tierSize(t: Tier) {
   return t === "landmark" ? 16 : t === "major" ? 11 : 7;
 }
 
-type IconName = "play" | "museum" | "search" | "filter" | "graph" | "timeline" | "close" | "eye" | "eyeOff" | "external" | "chevronL" | "chevronR" | "flag" | "info" | "check" | "layers" | "image" | "plus" | "minus" | "fit";
+type IconName = "play" | "museum" | "search" | "filter" | "graph" | "timeline" | "close" | "eye" | "eyeOff" | "external" | "chevronL" | "chevronR" | "flag" | "info" | "check" | "layers" | "image" | "plus" | "minus" | "fit" | "fitExit";
 
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const p = {
@@ -146,6 +147,8 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
       return (<svg {...p}><path d="M12 5v14M5 12h14" /></svg>);
     case "minus":
       return (<svg {...p}><path d="M5 12h14" /></svg>);
+    case "fitExit":
+      return (<svg {...p}><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></svg>);
     case "fit":
       return (<svg {...p}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>);
   }

@@ -1,9 +1,11 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
-import { events, eventById, type ClusterId, type EraId, type Event, type Media, type SpoilerLevel, type Tier } from "@/data";
+import { events, eventById, type ClusterId, type EraId, type Event, type Media, type Tier } from "@/data";
 
-export type View = "timeline" | "graph";
+export type View = "timeline" | "museum" | "graph";
+export type SpoilerMedia = "edgerunners" | "2077" | "phantom-liberty";
+export type MuseumPane = "card" | "timeline" | "map";
 /** 0 = landmarks, 1 = + major, 2 = + minor. Driven by zoom, not by a switch. */
 export type TierLevel = 0 | 1 | 2;
 
@@ -11,12 +13,14 @@ export interface Filters {
   clusters: ClusterId[];
   eras: EraId[];
   media: Media[];
-  spoilers: SpoilerLevel[];
 }
 
 export interface State {
   view: View;
-  hideSpoilers: boolean;
+  /** Stories the viewer hasn't seen yet: events that spoil them are blurred until tapped. */
+  spoilerFree: SpoilerMedia[];
+  /** Fullscreen: the top bar is hidden. */
+  immersive: boolean;
   showImages: boolean;
   revealed: string[]; // spoiler cards the user tapped open
   filters: Filters;
@@ -24,27 +28,32 @@ export interface State {
   viewed: string[];
   panel: null | "search" | "filters" | "start" | "about";
   pathIndex: number | null; // position in Start Here path while following it
-  /** Museum mode on the map: index into the chronological event list (-1 = not started). */
+  /** Museum: index into the chronological event list (-1 = not started). `active` mirrors view === "museum". */
   museum: { active: boolean; index: number };
+  museumPanes: Record<MuseumPane, boolean>;
 }
 
 type Action =
   | { type: "view"; view: View }
-  | { type: "hideSpoilers"; value: boolean }
+  | { type: "spoilerFree"; value: SpoilerMedia[] }
+  | { type: "immersive"; value: boolean }
+  | { type: "museumPane"; pane: MuseumPane }
   | { type: "showImages"; value: boolean }
   | { type: "reveal"; id: string }
   | { type: "filters"; filters: Partial<Filters> }
   | { type: "clearFilters" }
   | { type: "select"; id: string | null; pathIndex?: number | null }
   | { type: "panel"; panel: State["panel"] }
-  | { type: "museum"; active: boolean; index?: number }
-  | { type: "hydrate"; viewed: string[]; hideSpoilers: boolean; showImages: boolean };
+  | { type: "museum"; index: number }
+  | { type: "hydrate"; viewed: string[]; spoilerFree: SpoilerMedia[]; showImages: boolean };
 
-const emptyFilters: Filters = { clusters: [], eras: [], media: [], spoilers: [] };
+const emptyFilters: Filters = { clusters: [], eras: [], media: [] };
+export const DEFAULT_SPOILER_FREE: SpoilerMedia[] = ["2077", "phantom-liberty"];
 
 const initial: State = {
   view: "timeline",
-  hideSpoilers: true,
+  spoilerFree: DEFAULT_SPOILER_FREE,
+  immersive: false,
   showImages: true,
   revealed: [],
   filters: emptyFilters,
@@ -53,16 +62,23 @@ const initial: State = {
   panel: null,
   pathIndex: null,
   museum: { active: false, index: -1 },
+  museumPanes: { card: true, timeline: true, map: true },
 };
 
 function reducer(s: State, a: Action): State {
   switch (a.type) {
     case "view":
-      return { ...s, view: a.view };
+      return { ...s, view: a.view, museum: { ...s.museum, active: a.view === "museum" }, pathIndex: null, selectedId: a.view === "museum" || s.view === "museum" ? null : s.selectedId };
     case "showImages":
       return { ...s, showImages: a.value };
-    case "hideSpoilers":
-      return { ...s, hideSpoilers: a.value, revealed: a.value ? [] : s.revealed };
+    case "spoilerFree":
+      return { ...s, spoilerFree: a.value, revealed: [] };
+    case "immersive":
+      return { ...s, immersive: a.value };
+    case "museumPane": {
+      const next = { ...s.museumPanes, [a.pane]: !s.museumPanes[a.pane] };
+      return Object.values(next).some(Boolean) ? { ...s, museumPanes: next } : s; // keep at least one pane
+    }
     case "reveal":
       return s.revealed.includes(a.id) ? s : { ...s, revealed: [...s.revealed, a.id] };
     case "filters":
@@ -76,14 +92,14 @@ function reducer(s: State, a: Action): State {
     case "panel":
       return { ...s, panel: a.panel };
     case "museum":
-      return { ...s, museum: { active: a.active, index: a.index ?? (a.active ? s.museum.index : -1) }, ...(a.active ? { pathIndex: null } : {}) };
+      return { ...s, museum: { ...s.museum, index: a.index } };
     case "hydrate":
-      return { ...s, viewed: a.viewed, hideSpoilers: a.hideSpoilers, showImages: a.showImages };
+      return { ...s, viewed: a.viewed, spoilerFree: a.spoilerFree, showImages: a.showImages };
   }
 }
 
 const VIEWED_KEY = "ncl.viewed.v1";
-const SPOILER_KEY = "ncl.hideSpoilers.v1";
+const SPOILER_KEY = "ncl.spoilerFree.v1";
 const IMAGES_KEY = "ncl.showImages.v1";
 
 const Ctx = createContext<{ state: State; dispatch: React.Dispatch<Action> } | null>(null);
@@ -95,9 +111,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const viewed = JSON.parse(localStorage.getItem(VIEWED_KEY) ?? "[]");
-      const hs = localStorage.getItem(SPOILER_KEY);
+      const sf = JSON.parse(localStorage.getItem(SPOILER_KEY) ?? "null");
       const im = localStorage.getItem(IMAGES_KEY);
-      dispatch({ type: "hydrate", viewed: Array.isArray(viewed) ? viewed.filter((id) => eventById[id]) : [], hideSpoilers: hs === null ? true : hs === "1", showImages: im === null ? true : im === "1" });
+      const okSf = Array.isArray(sf) ? sf.filter((m) => m === "edgerunners" || m === "2077" || m === "phantom-liberty") : DEFAULT_SPOILER_FREE;
+      dispatch({ type: "hydrate", viewed: Array.isArray(viewed) ? viewed.filter((id) => eventById[id]) : [], spoilerFree: okSf, showImages: im === null ? true : im === "1" });
     } catch {
       /* storage blocked: defaults are fine */
     }
@@ -109,9 +126,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [state.viewed]);
   useEffect(() => {
     try {
-      localStorage.setItem(SPOILER_KEY, state.hideSpoilers ? "1" : "0");
+      localStorage.setItem(SPOILER_KEY, JSON.stringify(state.spoilerFree));
     } catch {}
-  }, [state.hideSpoilers]);
+  }, [state.spoilerFree]);
   useEffect(() => {
     try {
       localStorage.setItem(IMAGES_KEY, state.showImages ? "1" : "0");
@@ -144,8 +161,7 @@ export function useFilteredEvents(): Event[] {
         (e) =>
           (!f.clusters.length || f.clusters.includes(e.cluster)) &&
           (!f.eras.length || f.eras.includes(e.era)) &&
-          (!f.media.length || f.media.some((m) => e.media.includes(m))) &&
-          (!f.spoilers.length || f.spoilers.includes(e.spoilerLevel === "edgerunners-safe" ? "world" : e.spoilerLevel)),
+          (!f.media.length || f.media.some((m) => e.media.includes(m))),
       ),
     [f],
   );
@@ -153,11 +169,11 @@ export function useFilteredEvents(): Event[] {
 
 export function useIsHidden() {
   const { state } = useStore();
-  return useCallback((e: Event) => state.hideSpoilers && e.spoilerLevel === "game-spoiler" && !state.revealed.includes(e.id), [state.hideSpoilers, state.revealed]);
+  return useCallback((e: Event) => !!e.spoils && state.spoilerFree.includes(e.spoils as SpoilerMedia) && !state.revealed.includes(e.id), [state.spoilerFree, state.revealed]);
 }
 
 export function activeFilterCount(f: Filters) {
-  return f.clusters.length + f.eras.length + f.media.length + f.spoilers.length;
+  return f.clusters.length + f.eras.length + f.media.length;
 }
 
 export function usePrefersReducedMotion() {
@@ -181,7 +197,8 @@ export function usePanelInset() {
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
-  const open = !!state.selectedId;
+  // The museum lays its panes side by side, so nothing overlaps the views there.
+  const open = !!state.selectedId && state.view !== "museum";
   const desktop = vw.w >= 768;
   return { desktop, left: open && desktop ? PANEL_W : 0, bottom: open && !desktop ? Math.round(vw.h * PEEK) : 0 };
 }

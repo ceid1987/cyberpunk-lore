@@ -2,17 +2,20 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { clusters, clusterById, eras, events, eventById, startHere, type Media, type SpoilerLevel } from "@/data";
-import { activeFilterCount, useFilteredEvents, useIsHidden, useStore, usePrefersReducedMotion, type Filters } from "@/lib/store";
-import { ClusterIcon, Icon, MEDIA_LABEL, SPOILER_LABEL } from "./ui";
+import { clusters, clusterById, eras, events, type Media } from "@/data";
+import { activeFilterCount, useFilteredEvents, useIsHidden, useStore, usePrefersReducedMotion, type Filters, type SpoilerMedia } from "@/lib/store";
+import { ClusterIcon, Icon, MEDIA_LABEL, SPOIL_LABEL, SPOIL_NAME } from "./ui";
 
 function Panel({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
   const reduced = usePrefersReducedMotion();
+  // Stable listener: re-subscribing on every render could drop the key while another handler re-renders the app.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const k = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
-  }, [onClose]);
+  }, []);
   return (
     <motion.div
       role="dialog"
@@ -48,7 +51,6 @@ export default function Panels() {
     <AnimatePresence>
       {state.panel === "search" && <SearchPanel key="search" onClose={close} />}
       {state.panel === "filters" && <FiltersPanel key="filters" onClose={close} />}
-      {state.panel === "start" && <StartPanel key="start" onClose={close} />}
       {state.panel === "about" && <AboutPanel key="about" onClose={close} />}
     </AnimatePresence>
   );
@@ -125,7 +127,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
                     {e.inWorldDate} · {c.short}
                   </span>
                   <span className={`block text-[15px] leading-snug text-ink ${hidden ? "spoiler-blur" : ""}`}>{e.title}</span>
-                  {hidden && <span className="text-xs text-magenta">2077 spoiler</span>}
+                  {hidden && e.spoils && <span className="text-xs text-magenta">{SPOIL_LABEL[e.spoils]}</span>}
                 </span>
               </button>
             </li>
@@ -199,12 +201,17 @@ function FiltersPanel({ onClose }: { onClose: () => void }) {
           </Chip>
         ))}
       </Section>
-      <Section title="Type">
-        {(["world", "game-spoiler"] as SpoilerLevel[]).map((s) => (
-          <Chip key={s} on={f.spoilers.includes(s)} color="#ff2a6d" onClick={() => set({ spoilers: toggle(f.spoilers, s) })}>
-            {SPOILER_LABEL[s]}
-          </Chip>
-        ))}
+      <Section title="Spoiler-free" hint="Blur events that spoil the story of what you haven't seen. Lore that only appears in a work stays visible: Arasaka is not an Edgerunners spoiler, David's last stand is.">
+        {(["edgerunners", "2077", "phantom-liberty"] as SpoilerMedia[]).map((m) => {
+          const on = state.spoilerFree.includes(m);
+          return (
+            <Chip key={m} on={on} color="#ff2a6d" onClick={() => dispatch({ type: "spoilerFree", value: toggle(state.spoilerFree, m) })}>
+              <span className="inline-flex items-center gap-1.5">
+                <Icon name={on ? "eyeOff" : "eye"} size={14} /> {SPOIL_NAME[m]}
+              </span>
+            </Chip>
+          );
+        })}
       </Section>
       <Section title="Display">
         <Chip on={state.showImages} color="#05d9e8" onClick={() => dispatch({ type: "showImages", value: !state.showImages })}>
@@ -213,61 +220,20 @@ function FiltersPanel({ onClose }: { onClose: () => void }) {
           </span>
         </Chip>
       </Section>
+      <button type="button" onClick={() => dispatch({ type: "panel", panel: "about" })} className="mb-2 inline-flex items-center gap-1.5 text-[13px] text-cyan underline">
+        <Icon name="info" size={14} /> About, sources and credits
+      </button>
     </Panel>
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
     <fieldset className="mb-5">
       <legend className="mb-2 font-display text-[11px] uppercase tracking-[0.18em] text-ink-3">{title}</legend>
+      {hint && <p className="-mt-1 mb-2 text-[12.5px] leading-snug text-ink-3">{hint}</p>}
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </fieldset>
-  );
-}
-
-// ---------------------------------------------------------------- start here
-function StartPanel({ onClose }: { onClose: () => void }) {
-  const { state, dispatch } = useStore();
-  const go = (i: number) => {
-    onClose();
-    dispatch({ type: "select", id: startHere[i].id, pathIndex: i });
-  };
-  return (
-    <Panel
-      title="Start here"
-      onClose={onClose}
-      footer={
-        <button type="button" onClick={() => go(0)} className="h-11 w-full rounded-md bg-yellow font-display text-sm font-bold uppercase tracking-wider text-bg">
-          Begin the path
-        </button>
-      }
-    >
-      <p className="text-[15px] leading-relaxed text-ink-2">
-        {startHere.length} key events, from the founding of Night City to the opening of Cyberpunk 2077.
-      </p>
-      <ol className="mt-4 space-y-1">
-        {startHere.map((s, i) => {
-          const e = eventById[s.id];
-          const c = clusterById[e.cluster];
-          const seen = state.viewed.includes(e.id);
-          return (
-            <li key={s.id}>
-              <button type="button" onClick={() => go(i)} className="flex w-full items-start gap-3 rounded-md px-1 py-2.5 text-left hover:bg-white/5">
-                <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-sm border font-display text-xs font-bold" style={{ borderColor: c.color, color: seen ? "#07070b" : c.color, background: seen ? c.color : "transparent" }}>
-                  {seen ? <Icon name="check" size={14} /> : i + 1}
-                </span>
-                <span>
-                  <span className="block font-display text-[11px] uppercase tracking-wider text-ink-3">{e.inWorldDate}</span>
-                  <span className="block text-[15px] font-medium leading-snug text-ink">{e.title}</span>
-                  <span className="block text-[13px] leading-snug text-ink-2">{s.note}</span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-    </Panel>
   );
 }
 
@@ -288,10 +254,11 @@ function AboutPanel({ onClose }: { onClose: () => void }) {
         </p>
         <h3 className="font-display text-xs uppercase tracking-[0.18em] text-yellow">Controls</h3>
         <ul className="list-disc space-y-1 pl-5">
-          <li>Timeline: drag to move, pinch or scroll to zoom. More events and larger cards appear as the zoom increases.</li>
-          <li>Map: tap a theme bubble to open it, then a hexagon to open a group. Museum mode steps through every event in order.</li>
+          <li>Timeline: drag to move, pinch or scroll to zoom. Cards appear as you zoom in, most important first.</li>
+          <li>Museum: steps through every event in order, with the details, the timeline and the map side by side.</li>
+          <li>Map: tap a theme bubble to open it, then a hexagon to open a group.</li>
           <li>Event details: swipe sideways for the previous or next event.</li>
-          <li>The eye button hides or shows 2077 and Phantom Liberty spoilers.</li>
+          <li>Filters → Spoiler-free chooses which stories stay blurred. Tap a blurred event to reveal it.</li>
         </ul>
         <h3 className="font-display text-xs uppercase tracking-[0.18em] text-yellow">Attribution and licensing</h3>
         <p className="text-sm">

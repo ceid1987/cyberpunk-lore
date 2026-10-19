@@ -2,14 +2,14 @@
 
 A mobile-first lore timeline and relevance map of the Cyberpunk world, made for friends who have watched **Cyberpunk: Edgerunners** but haven't played **Cyberpunk 2077**. Free, unofficial and non-commercial.
 
-- **Timeline view**: a horizontal white line from 1859 to 2095. Drag to move, pinch or scroll to zoom. Detail follows zoom: landmarks first, then major and minor events, and cards grow from compact to full (with the wiki image) as space allows.
-- **Map view**: every theme starts closed as one bubble. Tap a theme to open it: its groups (Arasaka, Militech, Johnny Silverhand, Nomads...) and loose events spring out of the bubble. Tap a group to open it the same way. Links are merged between whatever is on screen.
-- **Museum mode** (on the map): starts empty at 1859. The `>` button adds the next event in date order, every event including minor ones. The new node appears with its card open, the camera frames it, and links to events already shown are drawn from the older event to the new one. `<` steps back, arrow keys work too.
-- **Detail panel**: tapping an event opens it docked on the left on desktop, or as a bottom sheet on mobile that peeks and can be pulled up. Nothing behind it is blurred, so the timeline or map stays usable. Title, tags and the close button stay pinned while the text scrolls.
-- **Tags**: importance, Lore or 2077 Spoiler, and the media each subject appears in (Tabletop, 2077, Phantom Liberty, Edgerunners), derived from the wiki's own page metadata. The theme and its icon sit in the top right of each card.
-- **Images**: each event's lead image from its wiki page, hot-linked from the wiki with a credit link, shown uncropped, and switchable off in Filters.
-- **Spoiler safety**: 2077 and Phantom Liberty plot events are blurred until tapped; the eye button toggles this.
-- Search, filters (theme, era, media, type), a 15-step **Start here** path, and a "viewed" marker stored in the browser.
+- **Timeline view**: a horizontal white line from 1859 to 2095. It opens zoomed out with every event as a dot and no cards. Zooming in (pinch, scroll, or `+` / `-`, `0` to reset) brings in cards by importance: landmarks, then major, then minor events. Compact cards show date, theme and title; zoomed in further they become full cards with the wiki image and all tags. Cards are packed in world space, so panning or opening an event never moves them.
+- **Museum view**: steps through every event in date order with `>` (or the arrow keys). Three panes side by side: the event card, a slim timeline of points and short labels, and the map. Each pane can be switched off. The new point pops in on the timeline, the map node arrives with a pulse, and links to events already shown draw from the older event to the new one in both panes.
+- **Map view**: every theme starts closed as one bubble. Tap a theme to open it: its groups (Arasaka, Militech, Johnny Silverhand, Nomads...) and loose events spring out of the bubble. Tap a group to open it the same way.
+- **Detail panel**: tapping an event opens it docked on the left on desktop, or as a bottom sheet on mobile that peeks and can be pulled up. Nothing behind it is blurred. Date, theme, close button, title and tags stay pinned while the text scrolls.
+- **Spoiler-free filter**: choose any mix of Edgerunners, Cyberpunk 2077 and Phantom Liberty. Only events that spoil that story are blurred (tap to reveal); lore that merely appears in a work stays visible, so Arasaka is not an Edgerunners spoiler but David's last stand is. Each event's spoiler scope is derived in `data/index.ts` (`spoils`).
+- **Tags**: importance, Lore or "<work> Spoiler", and the media each subject appears in (Tabletop, 2077, Phantom Liberty, Edgerunners), from the wiki's own page metadata.
+- **Fullscreen**: hides the title bar (and uses browser fullscreen where available).
+- Search and filters (theme, era, media, spoiler-free, images) sit by the fullscreen button. A "viewed" marker is stored in the browser.
 
 ## Run it
 
@@ -30,13 +30,13 @@ Requires Node 20+.
 
 ```
 app/                    Next.js App Router entry (layout, page, global styles)
-components/             TimelineView, GraphView (canvas), EventSheet, Panels, TopBar, LoreApp
-lib/store.tsx           App state (view, filters, spoilers, viewed, selection, museum) via React context
+components/             TimelineView, GraphView (canvas), MuseumView, EventSheet, Panels, Tools, TopBar, LoreApp
+lib/store.tsx           App state (view, filters, spoiler-free, viewed, selection, museum panes, fullscreen)
 data/
   types.ts              LoreEvent / Era / Cluster types
   eras.ts, clusters.ts  Era boundaries and cluster colors
   events/<era>.ts       The events, one file per era
-  start-here.ts         The guided path
+  start-here.ts         A 15-event intro path (data only; not shown in the UI right now)
   generated/            graph-layout.json (built by `npm run layout`)
   raw/manifest.json     Wiki pages downloaded, with revision ids (page text itself is gitignored)
   sources.md            Which wiki pages each era cites (generated)
@@ -66,7 +66,7 @@ scripts/
   canonSource: "2077",                // primary source: 2077 | edgerunners | tabletop | multiple
   summary: "2 to 4 sentences: what happened.",
   whyItMatters: "One sentence: the consequence. Shown as the end of the same paragraph.",
-  spoilerLevel: "world",              // edgerunners-safe | world | game-spoiler
+  spoilerLevel: "world",              // edgerunners-safe | world | game-spoiler (game-spoiler = spoils 2077)
   related: [{ id: "unification-war", relation: "part-of" }],
   wikiUrl: w("Unification War", "Late war"),
   conflictNote: "Optional, not shown in the app: where wiki pages or canons disagree.",
