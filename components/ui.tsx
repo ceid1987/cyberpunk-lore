@@ -9,15 +9,15 @@ export const MEDIA_LABEL: Record<Media, string> = {
   "phantom-liberty": "Phantom Liberty",
   edgerunners: "Edgerunners",
 };
-export const MEDIA_SHORT: Record<Media, string> = { tabletop: "TTRPG", "2077": "2077", "phantom-liberty": "PL", edgerunners: "EDGE" };
 export const MEDIA_COLOR: Record<Media, string> = { tabletop: "#ff8fb3", "2077": "#fcee0a", "phantom-liberty": "#ff9b3d", edgerunners: "#c8ff2e" };
 
+/** Spoiler tag shown on events. Edgerunners-safe and world events are both just "Lore". */
 export const SPOILER_LABEL: Record<SpoilerLevel, string> = {
-  "edgerunners-safe": "Edgerunners-safe",
-  world: "World lore",
-  "game-spoiler": "2077 spoiler",
+  "edgerunners-safe": "Lore",
+  world: "Lore",
+  "game-spoiler": "2077 Spoiler",
 };
-export const SPOILER_COLOR: Record<SpoilerLevel, string> = { "edgerunners-safe": "#c8ff2e", world: "#05d9e8", "game-spoiler": "#ff2a6d" };
+export const SPOILER_COLOR: Record<SpoilerLevel, string> = { "edgerunners-safe": "#05d9e8", world: "#05d9e8", "game-spoiler": "#ff2a6d" };
 
 export const TIER_LABEL: Record<Tier, string> = { landmark: "Landmark", major: "Major", minor: "Minor" };
 export const TIER_COLOR: Record<Tier, string> = { landmark: "#fcee0a", major: "#05d9e8", minor: "#a9a9c0" };
@@ -39,7 +39,7 @@ export const CLUSTER_ICON: Record<ClusterId, string> = {
 
 export function ClusterIcon({ id, size = 14, color }: { id: ClusterId; size?: number; color?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color ?? clusterById[id].color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color ?? clusterById[id].color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden className="block shrink-0">
       <path d={CLUSTER_ICON[id]} />
     </svg>
   );
@@ -49,33 +49,40 @@ export function Tag({ children, color = "#a9a9c0", title, small }: { children: R
   return (
     <span
       title={title}
-      className={`cp-tag inline-flex items-center gap-1 border font-display font-medium uppercase leading-none tracking-wider ${small ? "px-1 py-[3px] text-[9.5px]" : "px-1.5 py-1 text-[11px]"}`}
-      style={{ color, borderColor: color + "70", background: color + "14" }}
+      className={`cp-tag inline-flex items-center gap-1 border font-display font-medium uppercase leading-none tracking-wider ${small ? "h-[17px] px-1 text-[9.5px]" : "h-[22px] px-1.5 text-[11px]"}`}
+      style={{ color, borderColor: color + "70", background: color + "14", ["--b" as string]: color + "70" }}
     >
       {children}
     </span>
   );
 }
 
-/** Every tag an event carries: theme, importance, spoiler level, and the media it appears in. */
+/** Theme badge with icon, placed in the top-right corner of cards and the detail header. */
+export function ClusterBadge({ id, small }: { id: ClusterId; small?: boolean }) {
+  const c = clusterById[id];
+  return (
+    <span className={`inline-flex items-center gap-1 font-display font-medium uppercase leading-none tracking-wider ${small ? "text-[9.5px]" : "text-[11px]"}`} style={{ color: c.color }} title={c.name}>
+      <ClusterIcon id={id} size={small ? 11 : 13} />
+      <span className="translate-y-[0.5px]">{c.short}</span>
+    </span>
+  );
+}
+
+/** Importance, spoiler level, and the media an event appears in. */
 export function TagRow({ e, small, hidden }: { e: Event; small?: boolean; hidden?: boolean }) {
-  const c = clusterById[e.cluster];
+  const spoiler = e.spoilerLevel === "game-spoiler";
   return (
     <div className={`flex flex-wrap items-center ${small ? "gap-1" : "gap-1.5"}`}>
-      <Tag color={c.color} small={small} title={c.name}>
-        <ClusterIcon id={e.cluster} size={small ? 10 : 12} />
-        {c.short}
-      </Tag>
       <Tag color={TIER_COLOR[e.tier]} small={small}>
         {TIER_LABEL[e.tier]}
       </Tag>
       <Tag color={SPOILER_COLOR[e.spoilerLevel]} small={small}>
-        {SPOILER_LABEL[e.spoilerLevel]}
+        {spoiler ? "2077 Spoiler" : "Lore"}
       </Tag>
       {!hidden &&
         e.media.map((m) => (
           <Tag key={m} color={MEDIA_COLOR[m]} small={small} title={`Appears in ${MEDIA_LABEL[m]}`}>
-            {small ? MEDIA_SHORT[m] : MEDIA_LABEL[m]}
+            {MEDIA_LABEL[m]}
           </Tag>
         ))}
     </div>
@@ -86,7 +93,7 @@ export function tierSize(t: Tier) {
   return t === "landmark" ? 16 : t === "major" ? 11 : 7;
 }
 
-type IconName = "search" | "filter" | "graph" | "timeline" | "close" | "eye" | "eyeOff" | "external" | "chevronL" | "chevronR" | "flag" | "info" | "check" | "layers" | "image" | "plus" | "minus" | "fit";
+type IconName = "play" | "museum" | "search" | "filter" | "graph" | "timeline" | "close" | "eye" | "eyeOff" | "external" | "chevronL" | "chevronR" | "flag" | "info" | "check" | "layers" | "image" | "plus" | "minus" | "fit";
 
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const p = {
@@ -101,6 +108,10 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     "aria-hidden": true,
   };
   switch (name) {
+    case "play":
+      return (<svg {...p}><path d="M8 5v14l11-7Z" /></svg>);
+    case "museum":
+      return (<svg {...p}><path d="M3 21h18M4 10h16M12 3l9 5H3ZM6 10v8M10 10v8M14 10v8M18 10v8" /></svg>);
     case "search":
       return (<svg {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></svg>);
     case "filter":
@@ -149,7 +160,7 @@ export function IconButton({ label, onClick, children, active, activeColor = "#0
       aria-pressed={active}
       onClick={onClick}
       className={`cp-btn relative grid h-10 w-10 place-items-center border transition-colors ${className}`}
-      style={active ? { borderColor: activeColor + "b0", background: activeColor + "1a", color: activeColor } : { borderColor: "#262636", background: "#12121ccc", color: "#a9a9c0" }}
+      style={active ? { borderColor: activeColor + "b0", background: activeColor + "1a", color: activeColor, ["--b" as string]: activeColor + "b0" } : { borderColor: "#262636", background: "#12121ccc", color: "#a9a9c0" }}
     >
       {children}
     </button>

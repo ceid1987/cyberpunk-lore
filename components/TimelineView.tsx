@@ -3,8 +3,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { animate } from "framer-motion";
 import { clusterById, eras, events as allEvents, eventById, type Event } from "@/data";
-import { tierAllowed, useFilteredEvents, useIsHidden, useStore, usePrefersReducedMotion, type TierLevel } from "@/lib/store";
-import { Icon, TagRow, tierSize } from "./ui";
+import { tierAllowed, useFilteredEvents, useIsHidden, useStore, usePanelInset, usePrefersReducedMotion, type TierLevel } from "@/lib/store";
+import { ClusterBadge, Icon, TagRow, tierSize } from "./ui";
 
 // ---------------------------------------------------------------------------
 // Horizontal, zoomable timeline.
@@ -67,8 +67,11 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
   const filtered = useFilteredEvents();
   const isHidden = useIsHidden();
   const reduced = usePrefersReducedMotion();
+  const inset = usePanelInset();
+  const insetRef = useRef(inset);
+  insetRef.current = inset;
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 375, h: 600 });
+  const [size, setSize] = useState({ w: 0, h: 0 });
   const [t, setT] = useState<T>({ k: 375 / WORLD_W, x: 20, y: 0 });
   const tRef = useRef(t);
   tRef.current = t;
@@ -82,7 +85,7 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
     return () => ro.disconnect();
   }, []);
 
-  const k0 = (size.w - 40) / WORLD_W;
+  const k0 = (Math.max(size.w, 320) - 40) / WORLD_W;
   const clampK = useCallback((k: number) => Math.max(k0 * 0.9, Math.min(k0 * 80, k)), [k0]);
 
   // Fit everything on first layout.
@@ -175,7 +178,7 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
       }
       if (s.captured) {
         suppressClick.current = true;
-        const maxY = 40;
+        const maxY = Math.max(40, size.h * 0.32);
         setT({ ...s.start, x: s.start.x + dx, y: Math.max(-maxY, Math.min(maxY, s.start.y + dy)) });
       }
     } else if (pts.length >= 2 && s.d && s.midX !== undefined) {
@@ -227,9 +230,13 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
     const need = TIER_ZOOM[e.tier === "landmark" ? 0 : e.tier === "major" ? 1 : 2] * k0 * 1.05;
     const k = Math.max(cur.k, need);
     const wx = yearToX(e.sortYear);
-    const px = wx * k + cur.x * (k / cur.k);
-    if (k === cur.k && px > size.w * 0.15 && px < size.w * 0.85) return;
-    animateTo({ k, x: size.w / 2 - wx * k, y: cur.y });
+    const { left, bottom } = insetRef.current;
+    const px = wx * cur.k + cur.x;
+    const cx = left + (size.w - left) / 2;
+    if (k === cur.k && px > left + (size.w - left) * 0.15 && px < size.w * 0.85) return;
+    // Keep the line in the visible part above a mobile bottom sheet.
+    const ty = bottom ? -Math.min(bottom * 0.55, size.h * 0.3) : cur.y;
+    animateTo({ k, x: cx - wx * k, y: ty });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.selectedId, hidden]);
 
@@ -301,7 +308,7 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
         return (
           <div key={s.era.id} className="pointer-events-none absolute inset-y-0" style={{ left: x0, width: x1 - x0, background: i % 2 ? "rgba(255,255,255,0.018)" : "transparent", borderLeft: "1px solid #26263680" }}>
             {showLabel && <div className="absolute top-2 whitespace-nowrap" style={{ left: labelX - x0 }}>
-              <div className="cp-glitch-soft font-display text-[13px] font-bold uppercase tracking-[0.16em] text-yellow/90" data-text={s.era.name}>
+              <div className="font-display text-[13px] font-bold uppercase tracking-[0.16em] text-yellow/90">
                 {s.era.name}
               </div>
               <div className="font-display text-[10px] tracking-[0.2em] text-ink-3">
@@ -313,10 +320,10 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
       })}
 
       {/* the line */}
-      <div className="pointer-events-none absolute left-0 right-0 h-[2px]" style={{ top: lineY - 1, background: "linear-gradient(90deg, #05d9e8aa, #ff2a6daa 50%, #fcee0aaa)", boxShadow: "0 0 10px #05d9e855" }} />
+      <div className="pointer-events-none absolute left-0 right-0 h-[2px] bg-white/85" style={{ top: lineY - 1 }} />
       {ticks.map((tk) => (
         <div key={tk.label} className="pointer-events-none absolute" style={{ left: tk.x, top: lineY }}>
-          <div className="absolute -translate-x-1/2 bg-ink-3" style={{ width: 1, height: tk.major ? 10 : 6, top: -(tk.major ? 5 : 3) }} />
+          <div className="absolute -translate-x-1/2 bg-white/70" style={{ width: 1, height: tk.major ? 10 : 6, top: -(tk.major ? 5 : 3) }} />
           <div className="absolute -translate-x-1/2 font-display text-[10px] tracking-wider text-ink-3" style={{ top: 7 }}>
             {tk.label}
           </div>
@@ -421,14 +428,19 @@ function EventCard({ e, mode, left, top }: { e: Event; mode: Mode; left: number;
       onClick={() => (hid ? dispatch({ type: "reveal", id: e.id }) : dispatch({ type: "select", id: e.id }))}
       aria-label={hid ? `Hidden 2077 spoiler, ${e.inWorldDate}. Activate to reveal.` : `${e.title}, ${e.inWorldDate}`}
       className={`cp-card absolute overflow-hidden border text-left transition-colors ${selected ? "bg-[#10202a]" : "bg-panel/95 hover:bg-[#171724]"}`}
-      style={{ left, top, width: w, height: h, borderColor: selected ? "#05d9e8" : hid ? "#2e2e3e" : c.color + "66", borderLeft: `3px solid ${hid ? "#3a3a4a" : c.color}` }}
+      style={{ left, top, width: w, height: h, borderColor: selected ? "#05d9e8" : hid ? "#2e2e3e" : c.color + "66", borderLeft: `3px solid ${hid ? "#3a3a4a" : c.color}`, ["--b" as string]: selected ? "#05d9e8" : hid ? "#2e2e3e" : c.color + "66" }}
     >
       {showImg && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={e.image!.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-[82px] w-full object-cover opacity-85" draggable={false} onError={(ev) => ((ev.currentTarget as HTMLImageElement).style.display = "none")} />
+        <div className="h-[82px] w-full bg-black">
+          <img src={e.image!.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-contain opacity-90" draggable={false} onError={(ev) => ((ev.currentTarget.parentElement as HTMLElement).style.display = "none")} />
+        </div>
       )}
       <div className={`${hid ? "spoiler-blur" : ""} ${mode === "full" ? "p-2" : "px-2 py-1.5"}`} aria-hidden={hid}>
-        <div className="font-display text-[10px] uppercase tracking-wider text-ink-3">{e.inWorldDate}</div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-w-0 truncate font-display text-[10px] uppercase tracking-wider text-ink-3">{e.inWorldDate}</span>
+          <ClusterBadge id={e.cluster} small />
+        </div>
         <div className={`font-display font-bold leading-[1.15] text-ink ${mode === "full" ? "line-clamp-2 text-[14px]" : "line-clamp-2 text-[12.5px]"}`}>{hid ? "Hidden spoiler event" : e.title}</div>
         <div className="mt-1">
           <TagRow e={e} small hidden={hid} />

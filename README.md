@@ -2,12 +2,14 @@
 
 A mobile-first lore timeline and relevance map of the Cyberpunk world, made for friends who have watched **Cyberpunk: Edgerunners** but haven't played **Cyberpunk 2077**. Free, unofficial and non-commercial.
 
-- **Timeline view**: a horizontal line from 1859 to 2095. Drag to move, pinch or scroll to zoom. Detail follows zoom: landmarks first, then major and minor events, and cards grow from compact to full (with the wiki image) as space allows. Every card shows all its tags.
-- **Map view**: every theme cluster is open, with related events bundled into groups (Arasaka, Militech, Johnny Silverhand, Nomads...). Tap a group to open it. Links are merged between whatever is on screen, so closed groups carry one line per neighbour.
-- **Tags**: theme (with icon), importance, spoiler level, and the media each subject appears in (Tabletop, 2077, Phantom Liberty, Edgerunners), derived from the wiki's own page metadata.
-- **Images**: each event's lead image from its wiki page, hot-linked from the wiki with a credit link, and switchable off in Filters.
+- **Timeline view**: a horizontal white line from 1859 to 2095. Drag to move, pinch or scroll to zoom. Detail follows zoom: landmarks first, then major and minor events, and cards grow from compact to full (with the wiki image) as space allows.
+- **Map view**: every theme starts closed as one bubble. Tap a theme to open it: its groups (Arasaka, Militech, Johnny Silverhand, Nomads...) and loose events spring out of the bubble. Tap a group to open it the same way. Links are merged between whatever is on screen.
+- **Museum mode** (on the map): starts empty at 1859. The `>` button adds the next event in date order, every event including minor ones. The new node appears with its card open, the camera frames it, and links to events already shown are drawn from the older event to the new one. `<` steps back, arrow keys work too.
+- **Detail panel**: tapping an event opens it docked on the left on desktop, or as a bottom sheet on mobile that peeks and can be pulled up. Nothing behind it is blurred, so the timeline or map stays usable. Title, tags and the close button stay pinned while the text scrolls.
+- **Tags**: importance, Lore or 2077 Spoiler, and the media each subject appears in (Tabletop, 2077, Phantom Liberty, Edgerunners), derived from the wiki's own page metadata. The theme and its icon sit in the top right of each card.
+- **Images**: each event's lead image from its wiki page, hot-linked from the wiki with a credit link, shown uncropped, and switchable off in Filters.
 - **Spoiler safety**: 2077 and Phantom Liberty plot events are blurred until tapped; the eye button toggles this.
-- Search, filters (theme, era, media, spoiler level), a 15-step **Start here** path, and a "viewed" marker stored in the browser.
+- Search, filters (theme, era, media, type), a 15-step **Start here** path, and a "viewed" marker stored in the browser.
 
 ## Run it
 
@@ -29,7 +31,7 @@ Requires Node 20+.
 ```
 app/                    Next.js App Router entry (layout, page, global styles)
 components/             TimelineView, GraphView (canvas), EventSheet, Panels, TopBar, LoreApp
-lib/store.tsx           App state (view, filters, tier level, spoilers, viewed) via React context
+lib/store.tsx           App state (view, filters, spoilers, viewed, selection, museum) via React context
 data/
   types.ts              LoreEvent / Era / Cluster types
   eras.ts, clusters.ts  Era boundaries and cluster colors
@@ -62,12 +64,12 @@ scripts/
   cluster: "governments",             // see data/clusters.ts
   tier: "major",                      // landmark | major | minor
   canonSource: "2077",                // primary source: 2077 | edgerunners | tabletop | multiple
-  summary: "2 to 4 sentences.",
-  whyItMatters: "One or two sentences.",
+  summary: "2 to 4 sentences: what happened.",
+  whyItMatters: "One sentence: the consequence. Shown as the end of the same paragraph.",
   spoilerLevel: "world",              // edgerunners-safe | world | game-spoiler
   related: [{ id: "unification-war", relation: "part-of" }],
   wikiUrl: w("Unification War", "Late war"),
-  conflictNote: "Optional: where wiki pages or canons disagree.",
+  conflictNote: "Optional, not shown in the app: where wiki pages or canons disagree.",
 }
 ```
 
@@ -97,10 +99,10 @@ Writing events is a reading-and-paraphrasing step, not an automatic one: the scr
 ## Tech choices
 
 - **Next.js (App Router) + TypeScript + Tailwind CSS v4**, static export.
-- **@tanstack/react-virtual** for the timeline, so only on-screen rows are rendered.
-- **d3-force** rather than React Flow for the map. React Flow renders every node as a DOM element and runs layout in the browser, which gets heavy on mid-range phones with hundreds of nodes. Here d3-force runs once at build time (`scripts/layout-graph.ts`, deterministic seed) and the map draws to a single `<canvas>`. Level of detail: clusters start as single bubbles, tiers appear as you zoom, only on-screen items are drawn, and labels show by tier and zoom.
+- The timeline is a custom pan/zoom view with a piecewise time scale (busy eras get more room) and greedy row packing; only on-screen cards are rendered.
+- **d3-force** rather than React Flow for the map. React Flow renders every node as a DOM element and runs layout in the browser, which gets heavy on mid-range phones with hundreds of nodes. Here d3-force runs once at build time (`scripts/layout-graph.ts`, deterministic seed) and the map draws to a single `<canvas>`. The layout is nested (group members, then groups inside themes, then themes) so opening a theme or group never overlaps its neighbours. Only on-screen items are drawn, and labels avoid colliding.
 - **Framer Motion** for the bottom sheet, panels and the view-switch morph (nodes fly from timeline to map positions; it falls back to a crossfade above 120 moving nodes, and to an instant switch with `prefers-reduced-motion`).
-- Fonts are self-hosted via Fontsource (Chakra Petch for headings, Inter for body). No images from CD Projekt Red, R. Talsorian or Netflix: visuals are CSS, SVG and canvas only.
+- Fonts are self-hosted via Fontsource (Chakra Petch for headings, Inter for body). UI visuals are CSS, SVG and canvas; the only third-party images are the wiki's own, hot-linked and credited.
 
 ## Attribution and licensing
 

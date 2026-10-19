@@ -197,8 +197,8 @@ function FiltersPanel({ onClose }: { onClose: () => void }) {
           </Chip>
         ))}
       </Section>
-      <Section title="Spoiler level">
-        {(Object.keys(SPOILER_LABEL) as SpoilerLevel[]).map((s) => (
+      <Section title="Type">
+        {(["world", "game-spoiler"] as SpoilerLevel[]).map((s) => (
           <Chip key={s} on={f.spoilers.includes(s)} color="#ff2a6d" onClick={() => set({ spoilers: toggle(f.spoilers, s) })}>
             {SPOILER_LABEL[s]}
           </Chip>
@@ -282,12 +282,12 @@ function AboutPanel({ onClose }: { onClose: () => void }) {
           <a className="text-cyan underline" href="https://cyberpunk.fandom.com/wiki/Timeline" target="_blank" rel="noopener noreferrer">
             Cyberpunk Wiki
           </a>{" "}
-          and links back to its source page. Where the wiki disagrees with itself, or tabletop and 2077 canon split, the event says so in a &ldquo;Wiki conflict&rdquo; note.
+          and links back to its source page.
         </p>
         <h3 className="font-display text-xs uppercase tracking-[0.18em] text-yellow">Controls</h3>
         <ul className="list-disc space-y-1 pl-5">
           <li>Timeline: drag to move, pinch or scroll to zoom. More events and larger cards appear as the zoom increases.</li>
-          <li>Map: themed clusters with grouped nodes. Tap a group to open it, tap an event for details.</li>
+          <li>Map: tap a theme bubble to open it, then a hexagon to open a group. Museum mode steps through every event in order.</li>
           <li>Event details: swipe sideways for the previous or next event.</li>
           <li>The eye button hides or shows 2077 and Phantom Liberty spoilers.</li>
         </ul>

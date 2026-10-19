@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
 import { events, eventById, type ClusterId, type EraId, type Event, type Media, type SpoilerLevel, type Tier } from "@/data";
 
 export type View = "timeline" | "graph";
@@ -24,6 +24,8 @@ export interface State {
   viewed: string[];
   panel: null | "search" | "filters" | "start" | "about";
   pathIndex: number | null; // position in Start Here path while following it
+  /** Museum mode on the map: index into the chronological event list (-1 = not started). */
+  museum: { active: boolean; index: number };
 }
 
 type Action =
@@ -35,6 +37,7 @@ type Action =
   | { type: "clearFilters" }
   | { type: "select"; id: string | null; pathIndex?: number | null }
   | { type: "panel"; panel: State["panel"] }
+  | { type: "museum"; active: boolean; index?: number }
   | { type: "hydrate"; viewed: string[]; hideSpoilers: boolean; showImages: boolean };
 
 const emptyFilters: Filters = { clusters: [], eras: [], media: [], spoilers: [] };
@@ -49,6 +52,7 @@ const initial: State = {
   viewed: [],
   panel: null,
   pathIndex: null,
+  museum: { active: false, index: -1 },
 };
 
 function reducer(s: State, a: Action): State {
@@ -71,6 +75,8 @@ function reducer(s: State, a: Action): State {
     }
     case "panel":
       return { ...s, panel: a.panel };
+    case "museum":
+      return { ...s, museum: { active: a.active, index: a.index ?? (a.active ? s.museum.index : -1) }, ...(a.active ? { pathIndex: null } : {}) };
     case "hydrate":
       return { ...s, viewed: a.viewed, hideSpoilers: a.hideSpoilers, showImages: a.showImages };
   }
@@ -139,7 +145,7 @@ export function useFilteredEvents(): Event[] {
           (!f.clusters.length || f.clusters.includes(e.cluster)) &&
           (!f.eras.length || f.eras.includes(e.era)) &&
           (!f.media.length || f.media.some((m) => e.media.includes(m))) &&
-          (!f.spoilers.length || f.spoilers.includes(e.spoilerLevel)),
+          (!f.spoilers.length || f.spoilers.includes(e.spoilerLevel === "edgerunners-safe" ? "world" : e.spoilerLevel)),
       ),
     [f],
   );
@@ -164,3 +170,21 @@ export function usePrefersReducedMotion() {
   }, []);
   return !!get();
 }
+
+/** Geometry of the event panel, so views can keep the focused item in the visible area. */
+export function usePanelInset() {
+  const { state } = useStore();
+  const [vw, setVw] = useState({ w: 1024, h: 800 });
+  useEffect(() => {
+    const on = () => setVw({ w: window.innerWidth, h: window.innerHeight });
+    on();
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  const open = !!state.selectedId;
+  const desktop = vw.w >= 768;
+  return { desktop, left: open && desktop ? PANEL_W : 0, bottom: open && !desktop ? Math.round(vw.h * PEEK) : 0 };
+}
+export const PANEL_W = 400;
+/** Mobile sheet: share of the screen height when peeking. */
+export const PEEK = 0.44;

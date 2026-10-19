@@ -35,6 +35,7 @@ function Shell() {
 
   const switchTo = (target: View) => {
     if (target === shown || phase !== "idle") return;
+    if (state.museum.active) dispatch({ type: "museum", active: false });
     dispatch({ type: "view", view: target });
     if (reduced) return setShown(target);
 
@@ -130,7 +131,7 @@ function Shell() {
 
         {/* view switch */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center pb-4" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
-          <div role="tablist" aria-label="View" className="pointer-events-auto flex overflow-hidden rounded-full border border-line bg-bg/90 p-1 shadow-[0_6px_30px_rgba(0,0,0,0.6)] backdrop-blur-md">
+          <div role="tablist" aria-label="View" className="cp-btn pointer-events-auto flex gap-1 border border-line bg-bg p-1">
             {(["timeline", "graph"] as View[]).map((v) => {
               const on = state.view === v;
               return (
@@ -139,7 +140,7 @@ function Shell() {
                   role="tab"
                   aria-selected={on}
                   onClick={() => switchTo(v)}
-                  className={`flex h-11 items-center gap-2 rounded-full px-5 font-display text-sm font-bold uppercase tracking-wider transition-colors ${on ? "bg-yellow text-bg" : "text-ink-2"}`}
+                  className={`flex h-10 items-center gap-2 px-4 font-display text-[13px] font-bold uppercase tracking-wider transition-colors ${on ? "bg-yellow text-bg" : "text-ink-2 hover:text-ink"}`}
                 >
                   <Icon name={v === "timeline" ? "timeline" : "graph"} size={18} />
                   {v === "timeline" ? "Timeline" : "Map"}
