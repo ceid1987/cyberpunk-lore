@@ -114,6 +114,8 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
   // ---- card packing, in world space so it only changes with zoom.
   // Zoom is quantised (about 3% steps) so packing doesn't churn every frame.
   const kq = Math.round(Math.log(t.k) * 32);
+  // Cards keep the row they had last time when possible, so zooming doesn't shuffle them.
+  const rowPref = useRef(new Map<string, number>());
   const packing = useMemo(() => {
     const k = Math.exp(kq / 32);
     const zz = k / k0;
@@ -125,30 +127,56 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
     for (const e of order) {
       const wx = yearToX(e.sortYear);
       const iv = { x0: wx - halfW, x1: wx + halfW };
-      for (let r = 0; r < rows.length; r++) {
+      const pref = rowPref.current.get(e.id);
+      const tryRows = pref !== undefined && pref < rows.length ? [pref, ...rows.keys()] : [...rows.keys()];
+      for (const r of tryRows) {
         if (rows[r].some((o) => o.x0 < iv.x1 && iv.x0 < o.x1)) continue;
         rows[r].push(iv);
         out.push({ e, wx, r });
         break;
       }
     }
+    for (const p of out) rowPref.current.set(p.e.id, p.r);
     return out;
   }, [filtered, kq, k0, size.h, card.w, card.h]);
 
+  // Cards that just left the packing (zooming out) fade out instead of vanishing.
+  type Slot = { e: Event; wx: number; r: number };
+  const [leaving, setLeaving] = useState<Map<string, Slot>>(new Map());
+  const prevPacking = useRef<Map<string, Slot>>(new Map());
+  useEffect(() => {
+    const now = new Map(packing.map((p) => [p.e.id, p]));
+    const gone = [...prevPacking.current.values()].filter((p) => !now.has(p.e.id));
+    prevPacking.current = now;
+    setLeaving((cur) => {
+      const next = new Map([...cur].filter(([id]) => !now.has(id)));
+      for (const g of gone) next.set(g.e.id, g);
+      return next.size || cur.size ? next : cur;
+    });
+    if (!gone.length) return;
+    // Not cleared on the next packing change: each batch must still be removed once its fade ends.
+    const ids = new Set(gone.map((g) => g.e.id));
+    setTimeout(() => setLeaving((cur) => (cur.size ? new Map([...cur].filter(([id]) => !ids.has(id) || prevPacking.current.has(id))) : cur)), 260);
+  }, [packing]);
+
+  const rowTop = (r: number) => {
+    const level = Math.floor(r / 2);
+    return r % 2 === 0 ? -(LINE_PAD + (level + 1) * card.h + level * ROW_GAP) : LINE_PAD + level * (card.h + ROW_GAP);
+  };
   const layout = useMemo(() => {
     const margin = card.w;
     const dots = filtered.map((e) => ({ e, px: yearToX(e.sortYear) * t.k + t.x })).filter((v) => v.px > -40 && v.px < size.w + 40);
-    const placed: { e: Event; px: number; left: number; top: number; side: 1 | -1 }[] = [];
-    for (const p of packing) {
+    const slots: { e: Event; px: number; top: number; side: 1 | -1; out: boolean }[] = [];
+    const add = (p: Slot, out: boolean) => {
       const px = p.wx * t.k + t.x;
-      if (px < -margin || px > size.w + margin) continue;
-      const level = Math.floor(p.r / 2);
-      const side: 1 | -1 = p.r % 2 === 0 ? -1 : 1;
-      const top = side === -1 ? -(LINE_PAD + (level + 1) * card.h + level * ROW_GAP) : LINE_PAD + level * (card.h + ROW_GAP);
-      placed.push({ e: p.e, px, left: px - card.w / 2, top, side });
-    }
-    return { dots, placed };
-  }, [filtered, packing, t.k, t.x, size.w, card.w, card.h]);
+      if (px < -margin || px > size.w + margin) return;
+      slots.push({ e: p.e, px, top: rowTop(p.r), side: p.r % 2 === 0 ? -1 : 1, out });
+    };
+    for (const p of packing) add(p, false);
+    for (const p of leaving.values()) add(p, true);
+    return { dots, slots };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, packing, leaving, t.k, t.x, size.w, card.w, card.h]);
 
   // ---- interaction
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -285,6 +313,7 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
       for (let y = first; y < s.e; y += step) {
         const x = toX(yearToX(y));
         if (x < -40 || x > size.w + 40) continue;
+        if (out.length && x - out[out.length - 1].x < 40) continue; // era boundaries can bunch labels up
         out.push({ x, label: String(y), major: y % (step * 5) === 0 });
       }
     }
@@ -349,15 +378,6 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
         </div>
       ))}
 
-      {/* connectors */}
-      <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
-        {layout.placed.map((p) => {
-          const c = clusterById[p.e.cluster].color;
-          const y2 = p.side === -1 ? lineY + p.top + card.h : lineY + p.top;
-          return <line key={p.e.id} x1={p.px} y1={lineY} x2={p.px} y2={y2} stroke={isHidden(p.e) ? "#3a3a4a" : c} strokeOpacity={0.55} strokeWidth={1} strokeDasharray={p.e.tier === "minor" ? "2 3" : undefined} />;
-        })}
-      </svg>
-
       {/* dots */}
       {layout.dots.map(({ e, px }) => {
         const c = clusterById[e.cluster].color;
@@ -390,10 +410,27 @@ const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function T
         );
       })}
 
-      {/* cards */}
-      {layout.placed.map((p) => (
-        <EventCard key={p.e.id} e={p.e} mode={mode} left={p.left} top={lineY + p.top} />
-      ))}
+      {/* cards: each slot sits on the line, so it grows out of / shrinks into its dot */}
+      {layout.slots.map((p) => {
+        const c = isHidden(p.e) ? "#3a3a4a" : clusterById[p.e.cluster].color;
+        const connTop = p.side === -1 ? p.top + card.h : 0;
+        const connH = p.side === -1 ? -(p.top + card.h) : p.top;
+        return (
+          <div key={p.e.id} className={`tl-slot absolute ${p.out ? "tl-out" : "tl-in"}`} style={{ left: p.px, top: lineY, width: 0, height: 0 }} aria-hidden={p.out || undefined}>
+            <div className="tl-move pointer-events-none absolute w-0" style={{ top: connTop, height: connH, borderLeft: `1px ${p.e.tier === "minor" ? "dashed" : "solid"} ${c}8c` }} />
+            <EventCard e={p.e} mode={mode} left={-card.w / 2} top={p.top} />
+          </div>
+        );
+      })}
+
+      {/* hint while only dots are showing */}
+      <div
+        className="pointer-events-none absolute inset-x-0 flex justify-center transition-opacity duration-300"
+        style={{ top: lineY + 40, opacity: z < CARD_ZOOM.landmark && filtered.length ? 1 : 0 }}
+        aria-hidden
+      >
+        <span className="font-display text-[11px] uppercase tracking-[0.2em] text-ink-3">Zoom in to see the events</span>
+      </div>
 
       {filtered.length === 0 && (
         <div className="absolute inset-x-0 top-1/3 text-center text-ink-2">
@@ -424,7 +461,7 @@ function EventCard({ e, mode, left, top }: { e: Event; mode: Mode; left: number;
       type="button"
       onClick={() => (hid ? dispatch({ type: "reveal", id: e.id }) : dispatch({ type: "select", id: e.id }))}
       aria-label={hid ? `Hidden spoiler, ${e.inWorldDate}. Activate to reveal.` : `${e.title}, ${e.inWorldDate}`}
-      className={`cp-card absolute flex flex-col overflow-hidden border text-left transition-colors ${selected ? "bg-[#10202a]" : "bg-panel/95 hover:bg-[#171724]"}`}
+      className={`cp-card tl-move absolute flex flex-col overflow-hidden border text-left ${selected ? "bg-[#10202a]" : "bg-panel/95 hover:bg-[#171724]"}`}
       style={{ left, top, width: w, height: h, borderColor: border, borderLeft: `3px solid ${hid ? "#3a3a4a" : c.color}`, ["--b" as string]: border }}
     >
       {withImg && (
