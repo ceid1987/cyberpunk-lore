@@ -1,355 +1,446 @@
 "use client";
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { clusterById, eraById, eras, type Era, type LoreEvent } from "@/data";
-import { useIsHidden, useStore, useVisibleEvents, type TierLevel } from "@/lib/store";
-import { Badge, CanonBadge, Icon, tierSize } from "./ui";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { animate } from "framer-motion";
+import { clusterById, eras, events as allEvents, eventById, type Event } from "@/data";
+import { tierAllowed, useFilteredEvents, useIsHidden, useStore, usePrefersReducedMotion, type TierLevel } from "@/lib/store";
+import { Icon, TagRow, tierSize } from "./ui";
 
-type Row = { kind: "era"; era: Era; count: number } | { kind: "event"; e: LoreEvent };
+// ---------------------------------------------------------------------------
+// Horizontal, zoomable timeline.
+//  * x axis is time. Each era gets a width proportional to how many events it
+//    holds, so the dense 1990-2077 stretch isn't squeezed by the empty 1800s.
+//  * Pinch / wheel zooms the time axis; drag pans in both directions.
+//  * Detail follows zoom: landmarks first, then major, then minor events;
+//    cards grow from compact to full (with image) as space allows.
+//  * Cards are placed greedily in rows above and below the line; anything that
+//    doesn't fit stays as a dot on the line until you zoom in further.
+// ---------------------------------------------------------------------------
+
+const START = 1855;
+const END = 2100;
+const LINE_PAD = 26; // gap between line and first card row
+const ROW_GAP = 10;
+const MAX_ROWS = 6; // per side
+
+type Mode = "compact" | "full";
+const CARD = { compact: { w: 176, h: 100 }, full: { w: 228, h: 196 } } as const;
+
+// ---- piecewise-linear time scale
+const ERA_W = (() => {
+  const counts: Record<string, number> = {};
+  for (const e of allEvents) counts[e.era] = (counts[e.era] ?? 0) + 1;
+  return eras.map((era) => {
+    const s = Number.isFinite(era.start) ? era.start : START;
+    const en = Number.isFinite(era.end) ? era.end : END;
+    return { era, s, e: en, w: 220 + 52 * (counts[era.id] ?? 0) };
+  });
+})();
+let acc = 0;
+const SEGS = ERA_W.map((seg) => {
+  const x0 = acc;
+  acc += seg.w;
+  return { ...seg, x0, x1: acc };
+});
+const WORLD_W = acc;
+
+export function yearToX(y: number) {
+  const seg = SEGS.find((s) => y >= s.s && y < s.e) ?? (y < START ? SEGS[0] : SEGS[SEGS.length - 1]);
+  const f = Math.max(0, Math.min(1, (y - seg.s) / (seg.e - seg.s)));
+  return seg.x0 + f * seg.w;
+}
+function xToYear(x: number) {
+  const seg = SEGS.find((s) => x >= s.x0 && x < s.x1) ?? (x < 0 ? SEGS[0] : SEGS[SEGS.length - 1]);
+  return seg.s + ((x - seg.x0) / seg.w) * (seg.e - seg.s);
+}
 
 export interface TimelineHandle {
-  /** Screen positions of node dots currently rendered, keyed by event id. */
   positions(): Record<string, { x: number; y: number; r: number }>;
 }
 
-const LINE_X = 30;
+type T = { k: number; x: number; y: number };
 
-function yearLabel(e: Era) {
-  const s = Number.isFinite(e.start) ? String(e.start) : "1800s";
-  const end = Number.isFinite(e.end) ? String(e.end - 1) : "…";
-  return `${s} – ${end}`;
-}
+const TIER_ZOOM: Record<number, number> = { 0: 1, 1: 2.6, 2: 6.5 };
 
 const TimelineView = forwardRef<TimelineHandle, { hidden?: boolean }>(function TimelineView({ hidden }, ref) {
   const { state, dispatch } = useStore();
-  const visible = useVisibleEvents();
+  const filtered = useFilteredEvents();
   const isHidden = useIsHidden();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const reduced = usePrefersReducedMotion();
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 375, h: 600 });
+  const [t, setT] = useState<T>({ k: 375 / WORLD_W, x: 20, y: 0 });
+  const tRef = useRef(t);
+  tRef.current = t;
 
-  const rows = useMemo<Row[]>(() => {
-    const out: Row[] = [];
-    let current: string | null = null;
-    for (const e of visible) {
-      if (e.era !== current) {
-        current = e.era;
-        out.push({ kind: "era", era: eraById[e.era], count: visible.filter((v) => v.era === e.era).length });
-      }
-      out.push({ kind: "event", e });
-    }
-    return out;
-  }, [visible]);
-
-  const indexById = useMemo(() => {
-    const m: Record<string, number> = {};
-    rows.forEach((r, i) => r.kind === "event" && (m[r.e.id] = i));
-    return m;
-  }, [rows]);
-
-  const virtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: (i) => (rows[i].kind === "era" ? 132 : rows[i].kind === "event" && (rows[i] as any).e.tier === "landmark" ? 150 : 92),
-    overscan: 8,
-    getItemKey: (i) => (rows[i].kind === "era" ? "era-" + (rows[i] as any).era.id : (rows[i] as any).e.id),
-  });
-
-  // Keep the reader's place when the tier level or filters change.
-  const anchorYear = useRef<number | null>(null);
-  const captureAnchor = useCallback(() => {
-    const first = virtualizer.getVirtualItems().find((v) => v.end > (scrollRef.current?.scrollTop ?? 0) + 40);
-    const r = first ? rows[first.index] : undefined;
-    anchorYear.current = r ? (r.kind === "event" ? r.e.sortYear : Number.isFinite(r.era.start) ? r.era.start : 0) : null;
-  }, [rows, virtualizer]);
-  const prevRows = useRef(rows);
-  useLayoutEffect(() => {
-    if (prevRows.current === rows) return;
-    prevRows.current = rows;
-    const y = anchorYear.current;
-    if (y == null) return;
-    let best = 0;
-    rows.forEach((r, i) => {
-      if (r.kind === "event" && r.e.sortYear <= y) best = i;
-    });
-    virtualizer.scrollToIndex(best, { align: "start" });
-  }, [rows, virtualizer]);
   useEffect(() => {
-    const el = scrollRef.current;
+    const el = wrapRef.current;
     if (!el) return;
-    const onScroll = () => captureAnchor();
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [captureAnchor]);
+    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    setSize({ w: el.clientWidth, h: el.clientHeight });
+    return () => ro.disconnect();
+  }, []);
 
-  // Follow the selected event (e.g. when swiping through events in the sheet).
+  const k0 = (size.w - 40) / WORLD_W;
+  const clampK = useCallback((k: number) => Math.max(k0 * 0.9, Math.min(k0 * 80, k)), [k0]);
+
+  // Fit everything on first layout.
+  const fitted = useRef(false);
   useEffect(() => {
-    if (!state.selectedId || hidden) return;
-    const i = indexById[state.selectedId];
-    if (i === undefined) return;
-    const items = virtualizer.getVirtualItems();
-    const el = scrollRef.current;
-    const it = items.find((v) => v.index === i);
-    if (!el || !it || it.start < el.scrollTop || it.end > el.scrollTop + el.clientHeight * 0.45) {
-      virtualizer.scrollToIndex(i, { align: "center", behavior: "smooth" });
+    if (!fitted.current && size.w > 0) {
+      fitted.current = true;
+      setT({ k: k0, x: 20, y: 0 });
     }
-  }, [state.selectedId, indexById, virtualizer, hidden]);
+  }, [size, k0]);
 
-  // Pinch on the timeline changes the detail level (spread fingers = more detail).
-  const pinch = useRef<{ d: number; level: TierLevel } | null>(null);
-  const onTouchStart = (ev: React.TouchEvent) => {
-    if (ev.touches.length === 2) {
-      const [a, b] = [ev.touches[0], ev.touches[1]];
-      pinch.current = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), level: state.tierLevel };
+  const z = t.k / k0;
+  const tierLevel: TierLevel = z >= TIER_ZOOM[2] ? 2 : z >= TIER_ZOOM[1] ? 1 : 0;
+  const mode: Mode = z >= 11 ? "full" : "compact";
+  const card = CARD[mode];
+  const lineY = size.h * 0.5 + t.y;
+
+  const toX = (wx: number) => wx * t.k + t.x;
+
+  // ---- which events, and where their cards go
+  const layout = useMemo(() => {
+    const margin = size.w * 0.6;
+    const visible = filtered.filter((e) => tierAllowed(e.tier, tierLevel)).map((e) => ({ e, px: yearToX(e.sortYear) * t.k + t.x }));
+    const inView = visible.filter((v) => v.px > -margin && v.px < size.w + margin);
+    const rank = (e: Event) => (e.tier === "landmark" ? 0 : e.tier === "major" ? 1 : 2);
+    const order = [...inView].sort((a, b) => rank(a.e) - rank(b.e) || (a.e.id === state.selectedId ? -1 : b.e.id === state.selectedId ? 1 : 0) || a.e.sortYear - b.e.sortYear);
+    // As many rows as fit on screen above and below the line (top band reserved for era names).
+    const perSide = Math.max(1, Math.min(MAX_ROWS, Math.floor((size.h / 2 - LINE_PAD - 44) / (card.h + ROW_GAP))));
+    const rows: { x0: number; x1: number }[][] = Array.from({ length: perSide * 2 }, () => []);
+    const placed: { e: Event; px: number; left: number; top: number; side: 1 | -1 }[] = [];
+    for (const v of order) {
+      const left = v.px - card.w / 2;
+      const iv = { x0: left - 8, x1: left + card.w + 8 };
+      for (let r = 0; r < perSide * 2; r++) {
+        const row = rows[r];
+        if (row.some((o) => o.x0 < iv.x1 && iv.x0 < o.x1)) continue;
+        row.push(iv);
+        const level = Math.floor(r / 2);
+        const side: 1 | -1 = r % 2 === 0 ? -1 : 1;
+        const top = side === -1 ? -(LINE_PAD + (level + 1) * card.h + level * ROW_GAP) : LINE_PAD + level * (card.h + ROW_GAP);
+        placed.push({ e: v.e, px: v.px, left, top, side });
+        break;
+      }
+    }
+    return { dots: inView, placed };
+  }, [filtered, tierLevel, t.k, t.x, size.w, size.h, card.w, card.h, state.selectedId]);
+
+  // ---- interaction
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const g = useRef<{ start: T; down: { x: number; y: number }; d?: number; midX?: number; moved: number; captured: boolean } | null>(null);
+  const suppressClick = useRef(false);
+
+  const zoomAt = useCallback(
+    (factor: number, cx: number) =>
+      setT((cur) => {
+        const k = clampK(cur.k * factor);
+        return { ...cur, k, x: cx - (cx - cur.x) * (k / cur.k) };
+      }),
+    [clampK],
+  );
+
+  const local = (ev: { clientX: number; clientY: number }) => {
+    const r = wrapRef.current!.getBoundingClientRect();
+    return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+  };
+  const onPointerDown = (ev: React.PointerEvent) => {
+    const p = local(ev);
+    pointers.current.set(ev.pointerId, p);
+    const pts = [...pointers.current.values()];
+    suppressClick.current = false;
+    if (pts.length === 1) g.current = { start: tRef.current, down: p, moved: 0, captured: false };
+    else if (pts.length === 2) {
+      const [a, b] = pts;
+      g.current = { start: tRef.current, down: p, d: Math.abs(a.x - b.x) + Math.abs(a.y - b.y) * 0.35, midX: (a.x + b.x) / 2, moved: 99, captured: true };
     }
   };
-  const onTouchMove = (ev: React.TouchEvent) => {
-    if (!pinch.current || ev.touches.length !== 2) return;
-    const [a, b] = [ev.touches[0], ev.touches[1]];
-    const ratio = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pinch.current.d;
-    const step = ratio > 1.35 ? 1 : ratio < 0.72 ? -1 : 0;
-    const next = Math.max(0, Math.min(2, pinch.current.level + step)) as TierLevel;
-    if (next !== state.tierLevel) dispatch({ type: "tier", level: next });
+  const onPointerMove = (ev: React.PointerEvent) => {
+    if (!pointers.current.has(ev.pointerId) || !g.current) return;
+    const p = local(ev);
+    pointers.current.set(ev.pointerId, p);
+    const pts = [...pointers.current.values()];
+    const s = g.current;
+    if (pts.length === 1) {
+      const dx = p.x - s.down.x;
+      const dy = p.y - s.down.y;
+      s.moved = Math.max(s.moved, Math.hypot(dx, dy));
+      if (s.moved > 6 && !s.captured) {
+        s.captured = true;
+        (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+      }
+      if (s.captured) {
+        suppressClick.current = true;
+        const maxY = 40;
+        setT({ ...s.start, x: s.start.x + dx, y: Math.max(-maxY, Math.min(maxY, s.start.y + dy)) });
+      }
+    } else if (pts.length >= 2 && s.d && s.midX !== undefined) {
+      suppressClick.current = true;
+      const [a, b] = pts;
+      const d = Math.abs(a.x - b.x) + Math.abs(a.y - b.y) * 0.35;
+      const mid = (a.x + b.x) / 2;
+      const k = clampK(s.start.k * (d / s.d));
+      setT({ ...s.start, k, x: mid - (s.midX - s.start.x) * (k / s.start.k) });
+    }
   };
-  const onTouchEnd = () => (pinch.current = null);
+  const onPointerUp = (ev: React.PointerEvent) => {
+    pointers.current.delete(ev.pointerId);
+    if (pointers.current.size === 1) {
+      const [p] = [...pointers.current.values()];
+      g.current = { start: tRef.current, down: p, moved: 99, captured: true };
+    } else if (pointers.current.size === 0) g.current = null;
+  };
+  const onWheel = (ev: React.WheelEvent) => {
+    const p = local(ev);
+    if (ev.shiftKey || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) setT((cur) => ({ ...cur, x: cur.x - (ev.deltaX || ev.deltaY) }));
+    else zoomAt(Math.exp(-ev.deltaY * 0.0018), p.x);
+  };
+  const onKeyDown = (ev: React.KeyboardEvent) => {
+    if (ev.target !== wrapRef.current) return;
+    if (ev.key === "ArrowLeft") setT((c) => ({ ...c, x: c.x + 80 }));
+    if (ev.key === "ArrowRight") setT((c) => ({ ...c, x: c.x - 80 }));
+    if (ev.key === "ArrowUp") setT((c) => ({ ...c, y: c.y + 60 }));
+    if (ev.key === "ArrowDown") setT((c) => ({ ...c, y: c.y - 60 }));
+    if (ev.key === "+" || ev.key === "=") zoomAt(1.4, size.w / 2);
+    if (ev.key === "-") zoomAt(1 / 1.4, size.w / 2);
+  };
+
+  const animateTo = useCallback(
+    (target: T) => {
+      if (reduced) return setT(target);
+      const from = tRef.current;
+      animate(0, 1, { duration: 0.5, ease: [0.2, 0.8, 0.2, 1], onUpdate: (q) => setT({ k: from.k + (target.k - from.k) * q, x: from.x + (target.x - from.x) * q, y: from.y + (target.y - from.y) * q }) });
+    },
+    [reduced],
+  );
+
+  // Bring the selected event into view, zooming in enough for its tier to show.
+  useEffect(() => {
+    if (hidden || !state.selectedId) return;
+    const e = eventById[state.selectedId];
+    if (!e) return;
+    const cur = tRef.current;
+    const need = TIER_ZOOM[e.tier === "landmark" ? 0 : e.tier === "major" ? 1 : 2] * k0 * 1.05;
+    const k = Math.max(cur.k, need);
+    const wx = yearToX(e.sortYear);
+    const px = wx * k + cur.x * (k / cur.k);
+    if (k === cur.k && px > size.w * 0.15 && px < size.w * 0.85) return;
+    animateTo({ k, x: size.w / 2 - wx * k, y: cur.y });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.selectedId, hidden]);
 
   useImperativeHandle(ref, () => ({
     positions() {
       const out: Record<string, { x: number; y: number; r: number }> = {};
-      scrollRef.current?.querySelectorAll<HTMLElement>("[data-node-id]").forEach((n) => {
+      wrapRef.current?.querySelectorAll<HTMLElement>("[data-node-id]").forEach((n) => {
         const b = n.getBoundingClientRect();
-        if (b.bottom < 0 || b.top > window.innerHeight) return;
+        if (b.right < 0 || b.left > window.innerWidth) return;
         out[n.dataset.nodeId!] = { x: b.left + b.width / 2, y: b.top + b.height / 2, r: b.width / 2 };
       });
       return out;
     },
   }));
 
-  // Sticky era header + scrubber state
-  const items = virtualizer.getVirtualItems();
-  const scrollTop = scrollRef.current?.scrollTop ?? 0;
-  const topItem = items.find((v) => v.end > scrollTop + 8);
-  let currentEra: Era | undefined;
-  if (topItem) {
-    for (let i = topItem.index; i >= 0; i--) {
-      const r = rows[i];
-      if (r.kind === "era") {
-        currentEra = r.era;
-        break;
-      }
-      if (r.kind === "event") {
-        currentEra = eraById[r.e.era];
-        break;
+  // ---- ticks
+  const ticks = useMemo(() => {
+    const out: { x: number; label: string; major: boolean }[] = [];
+    for (const s of SEGS) {
+      const sx0 = toX(s.x0);
+      const sx1 = toX(s.x1);
+      if (sx1 < -50 || sx0 > size.w + 50) continue;
+      const pxPerYear = (s.w * t.k) / (s.e - s.s);
+      const step = [1, 2, 5, 10, 20, 25, 50, 100].find((st) => st * pxPerYear >= 64) ?? 100;
+      const first = Math.ceil(s.s / step) * step;
+      for (let y = first; y < s.e; y += step) {
+        const x = toX(yearToX(y));
+        if (x < -40 || x > size.w + 40) continue;
+        out.push({ x, label: String(y), major: y % (step * 5) === 0 });
       }
     }
-  }
-  const topRow = topItem ? rows[topItem.index] : undefined;
-  const showSticky = !!currentEra && !(topRow?.kind === "era" && topItem && topItem.start > scrollTop - 60);
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t.k, t.x, size.w]);
+
+  const levelLabel = tierLevel === 0 ? "Landmarks" : tierLevel === 1 ? "Landmarks + major" : "All events";
 
   return (
-    <div className="absolute inset-0" aria-hidden={hidden}>
-      <div
-        ref={scrollRef}
-        className="no-scrollbar absolute inset-0 overflow-y-auto overscroll-contain"
-        style={{ touchAction: "pan-y" }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        role="feed"
-        aria-label="Timeline of events"
-        aria-busy={false}
-      >
-        <div className="relative w-full" style={{ height: virtualizer.getTotalSize() + 140 }}>
-          {/* The line */}
-          <div className="pointer-events-none absolute top-0 bottom-0 w-[2px]" style={{ left: LINE_X - 1, background: "linear-gradient(to bottom, #05d9e855, #ff2a6d55 50%, #fcee0a55)" }} />
-          {items.map((v) => {
-            const r = rows[v.index];
-            return (
-              <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} className="absolute left-0 w-full" style={{ transform: `translateY(${v.start}px)` }}>
-                {r.kind === "era" ? <EraRow era={r.era} count={r.count} /> : <EventRow e={r.e} hiddenSpoiler={isHidden(r.e)} />}
+    <div
+      ref={wrapRef}
+      className="absolute inset-0 select-none overflow-hidden outline-none"
+      style={{ touchAction: "none" }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onWheel={onWheel}
+      onKeyDown={onKeyDown}
+      tabIndex={0}
+      role="region"
+      aria-label="Timeline. Drag to move, pinch or use the zoom buttons to see more events."
+      aria-hidden={hidden}
+      onClickCapture={(ev) => {
+        if (suppressClick.current) {
+          ev.stopPropagation();
+          ev.preventDefault();
+          suppressClick.current = false;
+        }
+      }}
+    >
+      {/* era bands */}
+      {SEGS.map((s, i) => {
+        const x0 = toX(s.x0);
+        const x1 = toX(s.x1);
+        if (x1 < 0 || x0 > size.w) return null;
+        const labelW = s.era.name.length * 10 + 24;
+        const labelX = Math.max(x0, 0) + 10;
+        const showLabel = labelX + labelW < x1;
+        return (
+          <div key={s.era.id} className="pointer-events-none absolute inset-y-0" style={{ left: x0, width: x1 - x0, background: i % 2 ? "rgba(255,255,255,0.018)" : "transparent", borderLeft: "1px solid #26263680" }}>
+            {showLabel && <div className="absolute top-2 whitespace-nowrap" style={{ left: labelX - x0 }}>
+              <div className="cp-glitch-soft font-display text-[13px] font-bold uppercase tracking-[0.16em] text-yellow/90" data-text={s.era.name}>
+                {s.era.name}
               </div>
-            );
-          })}
-        </div>
-        {rows.length === 0 && (
-          <div className="p-8 pl-16 text-ink-2">
-            No events match these filters.{" "}
-            <button className="text-cyan underline" onClick={() => dispatch({ type: "clearFilters" })}>
-              Clear filters
-            </button>
+              <div className="font-display text-[10px] tracking-[0.2em] text-ink-3">
+                {Number.isFinite(s.era.start) ? s.era.start : "1800s"} – {Number.isFinite(s.era.end) ? s.era.end - 1 : "…"}
+              </div>
+            </div>}
           </div>
-        )}
+        );
+      })}
+
+      {/* the line */}
+      <div className="pointer-events-none absolute left-0 right-0 h-[2px]" style={{ top: lineY - 1, background: "linear-gradient(90deg, #05d9e8aa, #ff2a6daa 50%, #fcee0aaa)", boxShadow: "0 0 10px #05d9e855" }} />
+      {ticks.map((tk) => (
+        <div key={tk.label} className="pointer-events-none absolute" style={{ left: tk.x, top: lineY }}>
+          <div className="absolute -translate-x-1/2 bg-ink-3" style={{ width: 1, height: tk.major ? 10 : 6, top: -(tk.major ? 5 : 3) }} />
+          <div className="absolute -translate-x-1/2 font-display text-[10px] tracking-wider text-ink-3" style={{ top: 7 }}>
+            {tk.label}
+          </div>
+        </div>
+      ))}
+
+      {/* connectors */}
+      <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
+        {layout.placed.map((p) => {
+          const c = clusterById[p.e.cluster].color;
+          const y2 = p.side === -1 ? lineY + p.top + card.h : lineY + p.top;
+          return <line key={p.e.id} x1={p.px} y1={lineY} x2={p.px} y2={y2} stroke={isHidden(p.e) ? "#3a3a4a" : c} strokeOpacity={0.55} strokeWidth={1} strokeDasharray={p.e.tier === "minor" ? "2 3" : undefined} />;
+        })}
+      </svg>
+
+      {/* dots */}
+      {layout.dots.map(({ e, px }) => {
+        const c = clusterById[e.cluster].color;
+        const s = tierSize(e.tier);
+        const hid = isHidden(e);
+        const viewed = state.viewed.includes(e.id);
+        return (
+          <button
+            key={e.id}
+            type="button"
+            tabIndex={-1}
+            aria-label={hid ? "Hidden spoiler" : e.title}
+            onClick={() => (hid ? dispatch({ type: "reveal", id: e.id }) : dispatch({ type: "select", id: e.id }))}
+            className="absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center"
+            style={{ left: px, top: lineY, width: Math.max(28, s + 12), height: 28 }}
+          >
+            <span
+              data-node-id={e.id}
+              className={e.tier === "landmark" ? "rotate-45" : "rounded-full"}
+              style={{
+                width: s,
+                height: s,
+                background: hid ? "#2a2a3a" : c,
+                boxShadow: `0 0 0 2.5px #07070b${e.tier === "landmark" && !hid ? `, 0 0 12px ${c}` : ""}`,
+                outline: viewed || state.selectedId === e.id ? `1.5px solid ${state.selectedId === e.id ? "#fff" : c}` : undefined,
+                outlineOffset: 2,
+              }}
+            />
+          </button>
+        );
+      })}
+
+      {/* cards */}
+      {layout.placed.map((p) => (
+        <EventCard key={p.e.id} e={p.e} mode={mode} left={p.left} top={lineY + p.top} />
+      ))}
+
+      {/* zoom controls + detail level */}
+      <div className="absolute bottom-24 right-2 flex flex-col gap-1.5" onPointerDown={(ev) => ev.stopPropagation()}>
+        <ZoomBtn label="Zoom in" onClick={() => zoomAt(1.6, size.w / 2)}>
+          <Icon name="plus" size={18} />
+        </ZoomBtn>
+        <ZoomBtn label="Zoom out" onClick={() => zoomAt(1 / 1.6, size.w / 2)}>
+          <Icon name="minus" size={18} />
+        </ZoomBtn>
+        <ZoomBtn label="Show the whole timeline" onClick={() => animateTo({ k: k0, x: 20, y: 0 })}>
+          <Icon name="fit" size={18} />
+        </ZoomBtn>
+      </div>
+      <div className="pointer-events-none absolute bottom-24 left-2 border border-line bg-bg/85 px-2 py-1 font-display text-[10.5px] uppercase tracking-wider text-ink-3" aria-live="polite">
+        {levelLabel} · {Math.floor(xToYear((size.w / 2 - t.x) / t.k))}
       </div>
 
-      {showSticky && currentEra && (
-        <div className="pointer-events-none absolute left-0 right-12 top-0 z-10 border-b border-line/70 bg-bg/95 py-2 pl-14 pr-3 backdrop-blur-sm">
-          <div className="font-display text-[13px] font-bold uppercase tracking-[0.16em] text-ink">{currentEra.name}</div>
-          <div className="font-display text-[11px] tracking-wider text-ink-3">{yearLabel(currentEra)}</div>
+      {filtered.length === 0 && (
+        <div className="absolute inset-x-0 top-1/3 text-center text-ink-2">
+          No events match these filters.{" "}
+          <button className="text-cyan underline" onClick={() => dispatch({ type: "clearFilters" })}>
+            Clear filters
+          </button>
         </div>
       )}
-
-      <Scrubber rows={rows} virtualizer={virtualizer} scrollEl={scrollRef} currentEra={currentEra?.id} />
     </div>
   );
 });
 
 export default TimelineView;
 
-function EraRow({ era, count }: { era: Era; count: number }) {
+function ZoomBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
-    <section className="relative pb-3 pl-14 pr-14 pt-8" aria-label={`Era: ${era.name}`}>
-      <span className="absolute h-4 w-4 rotate-45 border-2 border-yellow bg-bg" style={{ left: LINE_X - 8, top: 40 }} aria-hidden />
-      <h2 className="glitch font-display text-[22px] font-bold uppercase leading-tight tracking-[0.12em] text-yellow" data-text={era.name}>
-        {era.name}
-      </h2>
-      <p className="mt-0.5 font-display text-xs uppercase tracking-[0.2em] text-ink-3">
-        {yearLabel(era)} · {count} event{count === 1 ? "" : "s"}
-      </p>
-      <p className="mt-2 text-sm leading-snug text-ink-2">{era.blurb}</p>
-    </section>
+    <button type="button" aria-label={label} title={label} onClick={onClick} className="cp-btn grid h-10 w-10 place-items-center border border-line bg-bg/85 text-ink backdrop-blur-sm hover:border-cyan">
+      {children}
+    </button>
   );
 }
 
-function EventRow({ e, hiddenSpoiler }: { e: LoreEvent; hiddenSpoiler: boolean }) {
+function EventCard({ e, mode, left, top }: { e: Event; mode: Mode; left: number; top: number }) {
   const { state, dispatch } = useStore();
+  const isHidden = useIsHidden();
+  const hid = isHidden(e);
   const c = clusterById[e.cluster];
-  const size = tierSize(e.tier);
+  const { w, h } = CARD[mode];
   const selected = state.selectedId === e.id;
-  const viewed = state.viewed.includes(e.id);
-  const big = e.tier === "landmark";
-
-  const onClick = () => {
-    if (hiddenSpoiler) dispatch({ type: "reveal", id: e.id });
-    else dispatch({ type: "select", id: e.id });
-  };
-
+  const showImg = mode === "full" && state.showImages && !!e.image && !hid;
   return (
-    <article className="relative py-1.5 pl-14 pr-14">
-      <span
-        data-node-id={e.id}
-        aria-hidden
-        className="absolute rounded-full"
-        style={{
-          left: LINE_X - size / 2,
-          top: big ? 26 : 20,
-          width: size,
-          height: size,
-          background: hiddenSpoiler ? "#2a2a3a" : c.color,
-          boxShadow: big && !hiddenSpoiler ? `0 0 0 3px #07070b, 0 0 14px ${c.color}aa` : "0 0 0 3px #07070b",
-          outline: viewed ? `1.5px solid ${c.color}` : undefined,
-          outlineOffset: 2,
-        }}
-      />
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label={hiddenSpoiler ? `Hidden 2077 spoiler from ${e.inWorldDate}. Activate to reveal.` : `${e.title}, ${e.inWorldDate}`}
-        className={`group relative block w-full overflow-hidden rounded-md border text-left transition-colors ${selected ? "border-cyan bg-cyan/10" : "border-line bg-panel/70 hover:border-ink-3"} ${big ? "p-3.5" : "px-3 py-2.5"}`}
-        style={{ borderLeft: `3px solid ${hiddenSpoiler ? "#3a3a4a" : c.color}` }}
-      >
-        <div className={hiddenSpoiler ? "spoiler-blur" : ""} aria-hidden={hiddenSpoiler}>
-          <div className="flex items-center gap-2 font-display text-[11px] uppercase tracking-wider text-ink-3">
-            <span>{e.inWorldDate}</span>
-            {viewed && (
-              <span className="ml-auto inline-flex items-center gap-0.5 text-ink-3" title="Viewed">
-                <Icon name="check" size={12} />
-              </span>
-            )}
-          </div>
-          <h3 className={`mt-0.5 font-display font-bold leading-tight ${big ? "text-[19px] text-ink" : e.tier === "major" ? "text-[15.5px] text-ink" : "text-[14px] text-ink-2"}`}>{hiddenSpoiler ? "Hidden spoiler event" : e.title}</h3>
-          {big && !hiddenSpoiler && <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-snug text-ink-2">{e.summary}</p>}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="font-display text-[11px] uppercase tracking-wider" style={{ color: c.color }}>
-              {c.short}
-            </span>
-            {e.tier !== "minor" && <CanonBadge canon={e.canonSource} />}
-            {e.edgerunnersTie && !hiddenSpoiler && <Badge color="#c8ff2e">Seen in Edgerunners</Badge>}
-          </div>
+    <button
+      type="button"
+      onClick={() => (hid ? dispatch({ type: "reveal", id: e.id }) : dispatch({ type: "select", id: e.id }))}
+      aria-label={hid ? `Hidden 2077 spoiler, ${e.inWorldDate}. Activate to reveal.` : `${e.title}, ${e.inWorldDate}`}
+      className={`cp-card absolute overflow-hidden border text-left transition-colors ${selected ? "bg-[#10202a]" : "bg-panel/95 hover:bg-[#171724]"}`}
+      style={{ left, top, width: w, height: h, borderColor: selected ? "#05d9e8" : hid ? "#2e2e3e" : c.color + "66", borderLeft: `3px solid ${hid ? "#3a3a4a" : c.color}` }}
+    >
+      {showImg && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={e.image!.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-[82px] w-full object-cover opacity-85" draggable={false} onError={(ev) => ((ev.currentTarget as HTMLImageElement).style.display = "none")} />
+      )}
+      <div className={`${hid ? "spoiler-blur" : ""} ${mode === "full" ? "p-2" : "px-2 py-1.5"}`} aria-hidden={hid}>
+        <div className="font-display text-[10px] uppercase tracking-wider text-ink-3">{e.inWorldDate}</div>
+        <div className={`font-display font-bold leading-[1.15] text-ink ${mode === "full" ? "line-clamp-2 text-[14px]" : "line-clamp-2 text-[12.5px]"}`}>{hid ? "Hidden spoiler event" : e.title}</div>
+        <div className="mt-1">
+          <TagRow e={e} small hidden={hid} />
         </div>
-        {hiddenSpoiler && (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-bg/30 font-display text-xs uppercase tracking-wider text-magenta">
-            <Icon name="eyeOff" size={16} /> 2077 spoiler · tap to reveal
-          </div>
-        )}
-      </button>
-    </article>
-  );
-}
-
-function Scrubber({ rows, virtualizer, scrollEl, currentEra }: { rows: Row[]; virtualizer: ReturnType<typeof useVirtualizer<HTMLDivElement, Element>>; scrollEl: React.RefObject<HTMLDivElement | null>; currentEra?: string }) {
-  const barRef = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<{ y: number; label: string } | null>(null);
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    const el = scrollEl.current;
-    if (!el) return;
-    let raf = 0;
-    const on = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => setTick((t) => t + 1));
-    };
-    el.addEventListener("scroll", on, { passive: true });
-    return () => el.removeEventListener("scroll", on);
-  }, [scrollEl]);
-
-  const segments = useMemo(() => {
-    const total = rows.length || 1;
-    const segs: { id: string; name: string; start: number; frac: number; from: number }[] = [];
-    rows.forEach((r, i) => {
-      if (r.kind === "era") segs.push({ id: r.era.id, name: r.era.name, start: i, frac: 0, from: Number.isFinite(r.era.start) ? r.era.start : 1859 });
-    });
-    segs.forEach((s, i) => (s.frac = ((segs[i + 1]?.start ?? total) - s.start) / total));
-    return segs;
-  }, [rows]);
-
-  const jump = (clientY: number) => {
-    const bar = barRef.current;
-    if (!bar || !rows.length) return;
-    const b = bar.getBoundingClientRect();
-    const f = Math.max(0, Math.min(1, (clientY - b.top) / b.height));
-    const idx = Math.min(rows.length - 1, Math.floor(f * rows.length));
-    virtualizer.scrollToIndex(idx, { align: "start" });
-    const r = rows[idx];
-    setDrag({ y: clientY - b.top, label: r.kind === "event" ? String(Math.floor(r.e.sortYear)) : r.era.name });
-  };
-
-  const el = scrollEl.current;
-  const progress = el && el.scrollHeight > el.clientHeight ? el.scrollTop / (el.scrollHeight - el.clientHeight) : 0;
-
-  return (
-    <nav aria-label="Jump to era" className="absolute bottom-24 right-1 top-3 z-20 flex w-10 flex-col">
-      <div
-        ref={barRef}
-        className="relative flex flex-1 touch-none flex-col overflow-hidden rounded-sm border border-line/80 bg-bg-2/80"
-        onPointerDown={(ev) => {
-          (ev.target as HTMLElement).setPointerCapture?.(ev.pointerId);
-          jump(ev.clientY);
-        }}
-        onPointerMove={(ev) => ev.buttons && jump(ev.clientY)}
-        onPointerUp={() => setDrag(null)}
-        onPointerCancel={() => setDrag(null)}
-      >
-        {segments.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            aria-label={`Jump to ${s.name}`}
-            onClick={() => virtualizer.scrollToIndex(s.start, { align: "start" })}
-            className="relative w-full border-b border-line/60 text-left"
-            style={{ flexGrow: Math.max(s.frac, 0.02), flexBasis: 0, background: s.id === currentEra ? "#05d9e81f" : undefined }}
-          >
-            <span className="absolute left-0.5 top-0.5 font-display text-[9px] leading-none tracking-tight" style={{ color: s.id === currentEra ? "#05d9e8" : "#74748c" }}>
-              {s.from}
-            </span>
-          </button>
-        ))}
-        <div className="pointer-events-none absolute left-0 right-0 h-[3px] bg-yellow shadow-[0_0_8px_#fcee0a]" style={{ top: `calc(${progress * 100}% - 1px)` }} />
       </div>
-      {drag && (
-        <div className="pointer-events-none absolute right-12 rounded-sm border border-yellow/60 bg-bg px-2 py-1 font-display text-sm font-bold text-yellow" style={{ top: drag.y - 14 }}>
-          {drag.label}
+      {hid && (
+        <div className="absolute inset-0 grid place-items-center bg-bg/40 font-display text-[11px] uppercase tracking-wider text-magenta">
+          <span className="flex items-center gap-1.5">
+            <Icon name="eyeOff" size={14} /> 2077 spoiler
+          </span>
         </div>
       )}
-    </nav>
+    </button>
   );
 }

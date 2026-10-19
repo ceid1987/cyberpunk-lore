@@ -2,9 +2,9 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { clusters, clusterById, eras, events, eventById, startHere, type CanonSource, type SpoilerLevel } from "@/data";
+import { clusters, clusterById, eras, events, eventById, startHere, type Media, type SpoilerLevel } from "@/data";
 import { activeFilterCount, useFilteredEvents, useIsHidden, useStore, usePrefersReducedMotion, type Filters } from "@/lib/store";
-import { CANON_LABEL, Icon, SPOILER_LABEL } from "./ui";
+import { ClusterIcon, Icon, MEDIA_LABEL, SPOILER_LABEL } from "./ui";
 
 function Panel({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
   const reduced = usePrefersReducedMotion();
@@ -31,7 +31,7 @@ function Panel({ title, onClose, children, footer }: { title: string; onClose: (
           <Icon name="close" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3">{children}</div>
+      <div className="cp-scroll flex-1 overflow-y-auto overscroll-contain px-4 py-3">{children}</div>
       {footer && (
         <div className="border-t border-line px-4 py-2" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
           {footer}
@@ -58,7 +58,7 @@ export default function Panels() {
 function normalize(s: string) {
   return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
-const INDEX = events.map((e) => ({ e, title: normalize(e.title), body: normalize(`${e.summary} ${e.whyItMatters} ${e.inWorldDate} ${e.edgerunnersTie ?? ""}`) }));
+const INDEX = events.map((e) => ({ e, title: normalize(e.title), body: normalize(`${e.summary} ${e.whyItMatters} ${e.inWorldDate}`) }));
 
 function SearchPanel({ onClose }: { onClose: () => void }) {
   const { dispatch } = useStore();
@@ -176,7 +176,10 @@ function FiltersPanel({ onClose }: { onClose: () => void }) {
       <Section title="Theme">
         {clusters.map((c) => (
           <Chip key={c.id} on={f.clusters.includes(c.id)} color={c.color} onClick={() => set({ clusters: toggle(f.clusters, c.id) })}>
-            {c.name}
+            <span className="inline-flex items-center gap-1.5">
+              <ClusterIcon id={c.id} size={14} color={f.clusters.includes(c.id) ? c.color : "#74748c"} />
+              {c.name}
+            </span>
           </Chip>
         ))}
       </Section>
@@ -187,10 +190,10 @@ function FiltersPanel({ onClose }: { onClose: () => void }) {
           </Chip>
         ))}
       </Section>
-      <Section title="Canon source">
-        {(Object.keys(CANON_LABEL) as CanonSource[]).map((c) => (
-          <Chip key={c} on={f.canon.includes(c)} color="#fcee0a" onClick={() => set({ canon: toggle(f.canon, c) })}>
-            {CANON_LABEL[c]}
+      <Section title="Appears in">
+        {(Object.keys(MEDIA_LABEL) as Media[]).map((m) => (
+          <Chip key={m} on={f.media.includes(m)} color="#fcee0a" onClick={() => set({ media: toggle(f.media, m) })}>
+            {MEDIA_LABEL[m]}
           </Chip>
         ))}
       </Section>
@@ -201,7 +204,13 @@ function FiltersPanel({ onClose }: { onClose: () => void }) {
           </Chip>
         ))}
       </Section>
-      <p className="mt-4 text-xs leading-relaxed text-ink-3">The detail level (Key / + Major / All) and the spoiler switch are in the top bar. Spoiler events stay hidden behind a blur until you tap them, whatever the filters say.</p>
+      <Section title="Display">
+        <Chip on={state.showImages} color="#05d9e8" onClick={() => dispatch({ type: "showImages", value: !state.showImages })}>
+          <span className="inline-flex items-center gap-1.5">
+            <Icon name="image" size={14} /> Wiki images {state.showImages ? "on" : "off"}
+          </span>
+        </Chip>
+      </Section>
     </Panel>
   );
 }
@@ -233,7 +242,7 @@ function StartPanel({ onClose }: { onClose: () => void }) {
       }
     >
       <p className="text-[15px] leading-relaxed text-ink-2">
-        Watched Edgerunners and want the bigger picture? These {startHere.length} events take you from the founding of Night City to the opening of Cyberpunk 2077. Swipe through them in order, then explore freely.
+        {startHere.length} key events, from the founding of Night City to the opening of Cyberpunk 2077.
       </p>
       <ol className="mt-4 space-y-1">
         {startHere.map((s, i) => {
@@ -266,7 +275,7 @@ function AboutPanel({ onClose }: { onClose: () => void }) {
     <Panel title="About" onClose={onClose}>
       <div className="space-y-4 text-[15px] leading-relaxed text-ink-2">
         <p>
-          <strong className="text-ink">Night City Lore</strong> is a free, non-commercial fan project: a map of the Cyberpunk world for friends who have seen <em>Cyberpunk: Edgerunners</em> but not played <em>Cyberpunk 2077</em>.
+          <strong className="text-ink">Cyberpunk Lore</strong> is a free, non-commercial fan project: a map of the Cyberpunk world for friends who have seen <em>Cyberpunk: Edgerunners</em> but not played <em>Cyberpunk 2077</em>.
         </p>
         <p>
           Every event is written in our own words from the{" "}
@@ -275,12 +284,12 @@ function AboutPanel({ onClose }: { onClose: () => void }) {
           </a>{" "}
           and links back to its source page. Where the wiki disagrees with itself, or tabletop and 2077 canon split, the event says so in a &ldquo;Wiki conflict&rdquo; note.
         </p>
-        <h3 className="font-display text-xs uppercase tracking-[0.18em] text-yellow">How to use it</h3>
+        <h3 className="font-display text-xs uppercase tracking-[0.18em] text-yellow">Controls</h3>
         <ul className="list-disc space-y-1 pl-5">
-          <li>Scroll the timeline. Pinch out or use the Key / + Major / All switch for more detail.</li>
-          <li>Tap any event for details, then swipe sideways to move through time.</li>
-          <li>Switch to the Map to see how events connect by theme. Tap a bubble to open it.</li>
-          <li>Game spoilers are hidden until you tap them, or until you switch Safe mode off.</li>
+          <li>Timeline: drag to move, pinch or scroll to zoom. More events and larger cards appear as the zoom increases.</li>
+          <li>Map: themed clusters with grouped nodes. Tap a group to open it, tap an event for details.</li>
+          <li>Event details: swipe sideways for the previous or next event.</li>
+          <li>The eye button hides or shows 2077 and Phantom Liberty spoilers.</li>
         </ul>
         <h3 className="font-display text-xs uppercase tracking-[0.18em] text-yellow">Attribution and licensing</h3>
         <p className="text-sm">
@@ -289,6 +298,9 @@ function AboutPanel({ onClose }: { onClose: () => void }) {
             CC BY-SA 3.0
           </a>
           . Adapted content is shared under the same license.
+        </p>
+        <p className="text-sm">
+          Images are loaded directly from the Cyberpunk Wiki and remain the property of their respective owners (mostly CD Projekt Red, R. Talsorian Games and Netflix). Each is credited and linked to its wiki file page, and they can be switched off in Filters → Display.
         </p>
         <p className="text-sm">
           Cyberpunk, Cyberpunk 2077, Cyberpunk: Edgerunners and related names are trademarks of CD Projekt S.A., R. Talsorian Games and/or Netflix. This project is not affiliated with or endorsed by any of them, and uses no official art, logos or images.

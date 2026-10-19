@@ -1,69 +1,92 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { clusterById, type CanonSource, type ClusterId, type LoreEvent, type SpoilerLevel, type Tier } from "@/data";
+import { clusterById, type ClusterId, type Event, type Media, type SpoilerLevel, type Tier } from "@/data";
 
-export const CANON_LABEL: Record<CanonSource, string> = {
-  "2077": "2077",
-  edgerunners: "Edgerunners",
+export const MEDIA_LABEL: Record<Media, string> = {
   tabletop: "Tabletop",
-  multiple: "Multiple",
+  "2077": "2077",
+  "phantom-liberty": "Phantom Liberty",
+  edgerunners: "Edgerunners",
 };
+export const MEDIA_SHORT: Record<Media, string> = { tabletop: "TTRPG", "2077": "2077", "phantom-liberty": "PL", edgerunners: "EDGE" };
+export const MEDIA_COLOR: Record<Media, string> = { tabletop: "#ff8fb3", "2077": "#fcee0a", "phantom-liberty": "#ff9b3d", edgerunners: "#c8ff2e" };
 
 export const SPOILER_LABEL: Record<SpoilerLevel, string> = {
   "edgerunners-safe": "Edgerunners-safe",
   world: "World lore",
   "game-spoiler": "2077 spoiler",
 };
+export const SPOILER_COLOR: Record<SpoilerLevel, string> = { "edgerunners-safe": "#c8ff2e", world: "#05d9e8", "game-spoiler": "#ff2a6d" };
 
 export const TIER_LABEL: Record<Tier, string> = { landmark: "Landmark", major: "Major", minor: "Minor" };
+export const TIER_COLOR: Record<Tier, string> = { landmark: "#fcee0a", major: "#05d9e8", minor: "#a9a9c0" };
 
-export function Badge({ children, color = "#a9a9c0", title }: { children: ReactNode; color?: string; title?: string }) {
+/** 24x24 stroke icons per cluster. Shared by the DOM (SVG) and the map (canvas Path2D). */
+export const CLUSTER_ICON: Record<ClusterId, string> = {
+  megacorps: "M4 21V5l8-3v19M12 21V9l8 3v9M2 21h20M7 8h2M7 12h2M7 16h2M15 14h2M15 17h2",
+  governments: "M3 21h18M5 21V10M19 21V10M9.7 21V10M14.3 21V10M3 10l9-6 9 6Z",
+  "night-city": "M2 21h20M4 21V11h4v10M10 21V4h4v17M16 21V8h4v13M12 7v.01M12 10v.01",
+  "net-ai": "M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3M6 6h12v12H6ZM10 10h4v4h-4Z",
+  "cyberware-tech": "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1",
+  space: "M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10ZM2.5 16.5c1.5 1.8 17.5-6.7 19-9",
+  factions: "M12 3a7 7 0 0 0-7 7c0 2.5 1.3 4 3 5v3h8v-3c1.7-1 3-2.5 3-5a7 7 0 0 0-7-7ZM9 11h.01M15 11h.01M10 18v3M14 18v3",
+  figures: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21c0-4 3.6-7 8-7s8 3 8 7",
+  edgerunners: "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z",
+  cp2077: "M7 4h10l3 3v10l-3 3H7l-3-3V7ZM9 9h6v6H9Z",
+  world: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9Z",
+};
+
+export function ClusterIcon({ id, size = 14, color }: { id: ClusterId; size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color ?? clusterById[id].color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={CLUSTER_ICON[id]} />
+    </svg>
+  );
+}
+
+export function Tag({ children, color = "#a9a9c0", title, small }: { children: ReactNode; color?: string; title?: string; small?: boolean }) {
   return (
     <span
       title={title}
-      className="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-display text-[11px] font-medium uppercase leading-none tracking-wider"
-      style={{ color, borderColor: color + "66", background: color + "14" }}
+      className={`cp-tag inline-flex items-center gap-1 border font-display font-medium uppercase leading-none tracking-wider ${small ? "px-1 py-[3px] text-[9.5px]" : "px-1.5 py-1 text-[11px]"}`}
+      style={{ color, borderColor: color + "70", background: color + "14" }}
     >
       {children}
     </span>
   );
 }
 
-export function CanonBadge({ canon }: { canon: CanonSource }) {
-  const color = canon === "2077" ? "#fcee0a" : canon === "edgerunners" ? "#c8ff2e" : canon === "tabletop" ? "#ff8fb3" : "#b8c2cc";
+/** Every tag an event carries: theme, importance, spoiler level, and the media it appears in. */
+export function TagRow({ e, small, hidden }: { e: Event; small?: boolean; hidden?: boolean }) {
+  const c = clusterById[e.cluster];
   return (
-    <Badge color={color} title={`Canon source: ${CANON_LABEL[canon]}`}>
-      <span aria-hidden>◆</span>
-      {CANON_LABEL[canon]}
-    </Badge>
-  );
-}
-
-export function SpoilerBadge({ level }: { level: SpoilerLevel }) {
-  const color = level === "game-spoiler" ? "#ff2a6d" : level === "edgerunners-safe" ? "#c8ff2e" : "#05d9e8";
-  return <Badge color={color}>{SPOILER_LABEL[level]}</Badge>;
-}
-
-export function ClusterChip({ id, small }: { id: ClusterId; small?: boolean }) {
-  const c = clusterById[id];
-  return (
-    <span className={`inline-flex items-center gap-1.5 ${small ? "text-[11px]" : "text-xs"} font-display uppercase tracking-wider`} style={{ color: c.color }}>
-      <span className="inline-block h-2 w-2 rotate-45" style={{ background: c.color }} aria-hidden />
-      {c.short}
-    </span>
+    <div className={`flex flex-wrap items-center ${small ? "gap-1" : "gap-1.5"}`}>
+      <Tag color={c.color} small={small} title={c.name}>
+        <ClusterIcon id={e.cluster} size={small ? 10 : 12} />
+        {c.short}
+      </Tag>
+      <Tag color={TIER_COLOR[e.tier]} small={small}>
+        {TIER_LABEL[e.tier]}
+      </Tag>
+      <Tag color={SPOILER_COLOR[e.spoilerLevel]} small={small}>
+        {SPOILER_LABEL[e.spoilerLevel]}
+      </Tag>
+      {!hidden &&
+        e.media.map((m) => (
+          <Tag key={m} color={MEDIA_COLOR[m]} small={small} title={`Appears in ${MEDIA_LABEL[m]}`}>
+            {small ? MEDIA_SHORT[m] : MEDIA_LABEL[m]}
+          </Tag>
+        ))}
+    </div>
   );
 }
 
 export function tierSize(t: Tier) {
-  return t === "landmark" ? 18 : t === "major" ? 12 : 8;
+  return t === "landmark" ? 16 : t === "major" ? 11 : 7;
 }
 
-export function eventColor(e: LoreEvent) {
-  return clusterById[e.cluster].color;
-}
-
-type IconName = "search" | "filter" | "graph" | "timeline" | "close" | "eye" | "eyeOff" | "external" | "chevronL" | "chevronR" | "flag" | "info" | "check" | "layers";
+type IconName = "search" | "filter" | "graph" | "timeline" | "close" | "eye" | "eyeOff" | "external" | "chevronL" | "chevronR" | "flag" | "info" | "check" | "layers" | "image" | "plus" | "minus" | "fit";
 
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const p = {
@@ -85,7 +108,7 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     case "graph":
       return (<svg {...p}><circle cx="6" cy="7" r="2.5" /><circle cx="18" cy="6" r="2" /><circle cx="15" cy="17" r="3" /><path d="m8.3 8 4.9 7M8.5 7l7.5-.8M17.5 8l-1.6 6" /></svg>);
     case "timeline":
-      return (<svg {...p}><path d="M7 3v18" /><circle cx="7" cy="7" r="2" /><circle cx="7" cy="16" r="2" /><path d="M11 7h9M11 16h6" /></svg>);
+      return (<svg {...p}><path d="M3 12h18" /><circle cx="7" cy="12" r="2" /><circle cx="16" cy="12" r="2" /><path d="M7 10V5M16 14v5" /></svg>);
     case "close":
       return (<svg {...p}><path d="M6 6l12 12M18 6 6 18" /></svg>);
     case "eye":
@@ -106,10 +129,18 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
       return (<svg {...p}><path d="m5 12 4.5 4.5L19 7" /></svg>);
     case "layers":
       return (<svg {...p}><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 13 9 5 9-5" /></svg>);
+    case "image":
+      return (<svg {...p}><rect x="3" y="4" width="18" height="16" rx="1" /><circle cx="9" cy="10" r="2" /><path d="m21 17-5-5-9 8" /></svg>);
+    case "plus":
+      return (<svg {...p}><path d="M12 5v14M5 12h14" /></svg>);
+    case "minus":
+      return (<svg {...p}><path d="M5 12h14" /></svg>);
+    case "fit":
+      return (<svg {...p}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>);
   }
 }
 
-export function IconButton({ label, onClick, children, active, className = "" }: { label: string; onClick: () => void; children: ReactNode; active?: boolean; className?: string }) {
+export function IconButton({ label, onClick, children, active, activeColor = "#05d9e8", className = "" }: { label: string; onClick: () => void; children: ReactNode; active?: boolean; activeColor?: string; className?: string }) {
   return (
     <button
       type="button"
@@ -117,7 +148,8 @@ export function IconButton({ label, onClick, children, active, className = "" }:
       title={label}
       aria-pressed={active}
       onClick={onClick}
-      className={`relative grid h-11 w-11 place-items-center rounded-md border transition-colors ${active ? "border-cyan/70 bg-cyan/10 text-cyan" : "border-line bg-panel/80 text-ink-2 hover:text-ink"} ${className}`}
+      className={`cp-btn relative grid h-10 w-10 place-items-center border transition-colors ${className}`}
+      style={active ? { borderColor: activeColor + "b0", background: activeColor + "1a", color: activeColor } : { borderColor: "#262636", background: "#12121ccc", color: "#a9a9c0" }}
     >
       {children}
     </button>

@@ -88,7 +88,6 @@ export const collapse: LoreEvent[] = [
     summary: "Researchers at Stanford develop the first artificial muscle fibers. The breakthrough makes practical cybernetic arms and legs possible.",
     whyItMatters: "This is the starting point of cyberlimbs, and of the chrome culture that defines Night City.",
     spoilerLevel: "edgerunners-safe",
-    edgerunnersTie: "Almost everyone in Maine's crew runs on chrome that descends from this breakthrough.",
     related: [{ id: "first-central-american-war", relation: "involves" }],
     wikiUrl: w("Cyberlimb"),
   },
@@ -137,7 +136,6 @@ export const collapse: LoreEvent[] = [
     summary: "The European Economic Community forms and creates a shared currency, the Eurodollar. Only a few core countries qualify at first, and the transition brings turmoil and riots elsewhere in Europe.",
     whyItMatters: "The Eurodollar replaces the US dollar as the world's money and is still what everyone is paid in by 2077.",
     spoilerLevel: "edgerunners-safe",
-    edgerunnersTie: "The \"eddies\" everyone in Edgerunners is chasing are Eurodollars.",
     related: [
       { id: "quiet-war", relation: "involves" },
       { id: "crash-of-94", relation: "led-to" },
@@ -241,7 +239,6 @@ export const collapse: LoreEvent[] = [
     summary: "Construction begins in 1993 on land bought up around Morro Bay, and Coronado City is incorporated in 1994. Each neighborhood is built in its own architectural style to draw in a mix of cultures around a gleaming corporate center.",
     whyItMatters: "This is the city of Edgerunners and Cyberpunk 2077, born as a utopian dream in the middle of the Collapse.",
     spoilerLevel: "edgerunners-safe",
-    edgerunnersTie: "This is the Night City David grows up in, eighty years later.",
     related: [
       { id: "coronado-city-funded", relation: "caused" },
       { id: "richard-night-assassinated", relation: "led-to" },
@@ -458,7 +455,6 @@ export const collapse: LoreEvent[] = [
     summary: "Tycho is founded as humanity's first colony on the Moon, and by 1999 a mass driver hurls lunar materials up to build orbital platforms.",
     whyItMatters: "Tycho becomes the largest lunar city, part of the space frontier that only the rich can reach.",
     spoilerLevel: "edgerunners-safe",
-    edgerunnersTie: "Lucy dreams of the Moon. Part of Edgerunners takes place there.",
     related: [
       { id: "crystal-palace", relation: "led-to" },
       { id: "copernicus-founded", relation: "led-to" },
@@ -731,7 +727,6 @@ export const collapse: LoreEvent[] = [
     summary: "A worldwide satellite network is built, creating the framework for the Net: the global cyberspace that netrunners will later dive into.",
     whyItMatters: "The Net is the battlefield of netrunners, rogue AIs and the DataKrash. It all starts here.",
     spoilerLevel: "edgerunners-safe",
-    edgerunnersTie: "Lucy and Kiwi are netrunners, and the Net they dive into descends from this network.",
     related: [],
     wikiUrl: w("Net"),
   },
@@ -747,7 +742,6 @@ export const collapse: LoreEvent[] = [
     summary: "Under Donald Lundee, Armatech-Luccessi is renamed Militech Arms International. It grows into one of the world's biggest weapons makers and private military contractors.",
     whyItMatters: "Militech becomes Arasaka's arch-rival and the US government's corporate sword.",
     spoilerLevel: "edgerunners-safe",
-    edgerunnersTie: "The armada David tears apart with the cyberskeleton in the finale is Militech's.",
     related: [
       { id: "lundee-joins-militech", relation: "caused" },
       { id: "armatech-luccessi-founded", relation: "involves" },
@@ -918,5 +912,20 @@ export const collapse: LoreEvent[] = [
       { id: "rockerboy-manson", relation: "involves" },
     ],
     wikiUrl: w("Samurai"),
+  },
+  {
+    id: "rache-bartmoss-born",
+    title: "Rache Bartmoss is born",
+    inWorldDate: "1992",
+    sortYear: 1992.5,
+    era: "collapse",
+    cluster: "net-ai",
+    tier: "minor",
+    canonSource: "tabletop",
+    summary: "The future legend of netrunning is born. He starts running the Net at four years old, under his real name, and is good enough by the time he notices the risk that it no longer matters.",
+    whyItMatters: "Bartmoss becomes the most brilliant and paranoid netrunner of his age, and the man who later kills the old Net.",
+    spoilerLevel: "world",
+    related: [{ id: "datakrash", relation: "led-to" }],
+    wikiUrl: w("Rache Bartmoss"),
   },
 ];

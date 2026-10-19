@@ -5,7 +5,7 @@ import "@fontsource-variable/inter";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Night City Lore",
+  title: "Cyberpunk Lore",
   description: "An unofficial, fan-made timeline of the Cyberpunk world for people who watched Edgerunners.",
 };
 

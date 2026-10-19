@@ -13,7 +13,7 @@ export const divergence: LoreEvent[] = [
     tier: "minor",
     canonSource: "tabletop",
     summary: "The man who will found Arasaka is born in Tokyo. He serves as a captain in the Imperial Japanese Army before turning to business and industry.",
-    whyItMatters: "Every Arasaka you will ever hear about, from Saburo to Hanako, descends from him.",
+    whyItMatters: "Every later Arasaka, from Saburo to Hanako, descends from him.",
     spoilerLevel: "world",
     related: [{ id: "arasaka-founded", relation: "led-to" }],
     wikiUrl: w("Sasai Arasaka"),
@@ -31,7 +31,6 @@ export const divergence: LoreEvent[] = [
     summary: "Sasai Arasaka starts the company that bears his name and builds it into one of Imperial Japan's most successful wartime manufacturers. Sensing Japan would lose the coming war, he quietly moves much of the family fortune into overseas holdings.",
     whyItMatters: "This is the seed of the most powerful megacorporation in the setting, the security, banking and manufacturing giant that dominates Night City by 2077.",
     spoilerLevel: "edgerunners-safe",
-    edgerunnersTie: "This is the same Arasaka that Lucy escaped as a child netrunner and that Adam Smasher works for.",
     related: [
       { id: "sasai-arasaka-born", relation: "involves" },
       { id: "saburo-surrender-vision", relation: "led-to" },

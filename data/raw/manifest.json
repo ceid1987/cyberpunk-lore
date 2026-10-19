@@ -199,6 +199,12 @@
     "timestamp": "2026-09-10T08:03:16Z",
     "url": "https://cyberpunk.fandom.com/wiki/Arasaka_Tower"
   },
+  "Arasaka Tower (Tokyo)": {
+    "pageid": 8438,
+    "revid": 277397,
+    "timestamp": "2026-02-19T07:55:17Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Arasaka_Tower_(Tokyo)"
+  },
   "Arasaka Towers": {
     "pageid": 26943,
     "revid": 295879,
@@ -289,6 +295,12 @@
     "timestamp": "2026-07-10T02:41:49Z",
     "url": "https://cyberpunk.fandom.com/wiki/Badlands"
   },
+  "Bakkers": {
+    "pageid": 12673,
+    "revid": 279913,
+    "timestamp": "2026-02-19T20:41:15Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Bakkers"
+  },
   "Bank Block": {
     "pageid": 5903,
     "revid": 276304,
@@ -368,6 +380,12 @@
     "timestamp": "2026-07-07T04:44:08Z",
     "url": "https://cyberpunk.fandom.com/wiki/Blackwall"
   },
+  "Blackwall Gateway": {
+    "pageid": 34279,
+    "revid": 303902,
+    "timestamp": "2026-09-02T21:56:09Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Blackwall_Gateway"
+  },
   "Blood Nation": {
     "pageid": 6900,
     "revid": 300486,
@@ -415,6 +433,12 @@
     "revid": 301105,
     "timestamp": "2026-07-14T03:07:49Z",
     "url": "https://cyberpunk.fandom.com/wiki/Brick_Coleman"
+  },
+  "Brigitte": {
+    "pageid": 4211,
+    "revid": 300199,
+    "timestamp": "2026-07-03T01:05:51Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Brigitte"
   },
   "Brooke Bailey Atchison": {
     "pageid": 6784,
@@ -639,6 +663,12 @@
     "revid": 280653,
     "timestamp": "2026-02-20T07:58:43Z",
     "url": "https://cyberpunk.fandom.com/wiki/Cloning"
+  },
+  "Clouds": {
+    "pageid": 9600,
+    "revid": 301650,
+    "timestamp": "2026-07-18T21:59:27Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Clouds"
   },
   "Coastview (2077)": {
     "pageid": 8963,
@@ -967,6 +997,12 @@
     "timestamp": "2026-07-29T20:32:52Z",
     "url": "https://cyberpunk.fandom.com/wiki/Cynosure"
   },
+  "Cynosure Facility": {
+    "pageid": 31749,
+    "revid": 288842,
+    "timestamp": "2026-03-05T20:33:09Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Cynosure_Facility"
+  },
   "Danger Gal": {
     "pageid": 9919,
     "revid": 302706,
@@ -1286,7 +1322,8 @@
     "pageid": 2109,
     "revid": 299510,
     "timestamp": "2026-06-27T12:24:46Z",
-    "url": "https://cyberpunk.fandom.com/wiki/Euro_Business_Machines"
+    "url": "https://cyberpunk.fandom.com/wiki/Euro_Business_Machines",
+    "redirectFrom": "EBM"
   },
   "EuroBank": {
     "pageid": 5367,
@@ -1564,6 +1601,12 @@
     "timestamp": "2026-05-13T12:32:19Z",
     "url": "https://cyberpunk.fandom.com/wiki/Germany"
   },
+  "Ghost Town": {
+    "pageid": 11501,
+    "revid": 303015,
+    "timestamp": "2026-08-04T10:32:56Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Ghost_Town"
+  },
   "Gibson Freeway": {
     "pageid": 27098,
     "revid": 298194,
@@ -1610,8 +1653,13 @@
     "pageid": 37593,
     "revid": 304793,
     "timestamp": "2026-10-02T13:12:03Z",
-    "url": "https://cyberpunk.fandom.com/wiki/Government_of_Night_City",
-    "redirectFrom": "Night City Council"
+    "url": "https://cyberpunk.fandom.com/wiki/Government_of_Night_City"
+  },
+  "Government of the NUSA": {
+    "pageid": 4313,
+    "revid": 275872,
+    "timestamp": "2026-02-18T08:00:45Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Government_of_the_NUSA"
   },
   "Greece": {
     "pageid": 5527,
@@ -2002,8 +2050,7 @@
     "pageid": 7807,
     "revid": 304392,
     "timestamp": "2026-09-19T23:49:19Z",
-    "url": "https://cyberpunk.fandom.com/wiki/Judy_%C3%81lvarez",
-    "redirectFrom": "Judy Alvarez"
+    "url": "https://cyberpunk.fandom.com/wiki/Judy_%C3%81lvarez"
   },
   "Julio": {
     "pageid": 25787,
@@ -2094,7 +2141,8 @@
     "pageid": 3925,
     "revid": 304318,
     "timestamp": "2026-09-16T10:00:06Z",
-    "url": "https://cyberpunk.fandom.com/wiki/Kerry_Eurodyne"
+    "url": "https://cyberpunk.fandom.com/wiki/Kerry_Eurodyne",
+    "redirectFrom": "Kerry"
   },
   "Kirk Sawyer": {
     "pageid": 9131,
@@ -2567,6 +2615,12 @@
     "timestamp": "2026-03-20T08:55:06Z",
     "url": "https://cyberpunk.fandom.com/wiki/Miami"
   },
+  "Michiko Arasaka (Saburo's wife)": {
+    "pageid": 5086,
+    "revid": 275968,
+    "timestamp": "2026-02-18T08:06:35Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Michiko_Arasaka_(Saburo's_wife)"
+  },
   "Microtech": {
     "pageid": 4999,
     "revid": 275943,
@@ -2620,6 +2674,12 @@
     "revid": 305328,
     "timestamp": "2026-10-09T13:09:02Z",
     "url": "https://cyberpunk.fandom.com/wiki/Misty_Olszewski"
+  },
+  "Mitch Anderson": {
+    "pageid": 12911,
+    "revid": 303267,
+    "timestamp": "2026-08-08T15:59:53Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Mitch_Anderson"
   },
   "Mitsubishi": {
     "pageid": 5889,
@@ -2682,6 +2742,12 @@
     "revid": 299278,
     "timestamp": "2026-06-25T02:07:00Z",
     "url": "https://cyberpunk.fandom.com/wiki/Morro_Rock"
+  },
+  "Mr. Blue Eyes": {
+    "pageid": 11511,
+    "revid": 304404,
+    "timestamp": "2026-09-20T05:29:07Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Mr._Blue_Eyes"
   },
   "My Moon My Man": {
     "pageid": 25499,
@@ -3065,14 +3131,19 @@
     "pageid": 8928,
     "revid": 292884,
     "timestamp": "2026-04-23T19:22:54Z",
-    "url": "https://cyberpunk.fandom.com/wiki/Night_Corp",
-    "redirectFrom": "Night International"
+    "url": "https://cyberpunk.fandom.com/wiki/Night_Corp"
   },
   "Nightlife District": {
     "pageid": 16423,
     "revid": 296298,
     "timestamp": "2026-05-21T01:18:15Z",
     "url": "https://cyberpunk.fandom.com/wiki/Nightlife_District"
+  },
+  "Nocturne Op55N1": {
+    "pageid": 12088,
+    "revid": 302440,
+    "timestamp": "2026-07-26T07:44:08Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Nocturne_Op55N1"
   },
   "Nokota": {
     "pageid": 8997,
@@ -3517,6 +3588,12 @@
     "timestamp": "2026-05-22T02:40:39Z",
     "url": "https://cyberpunk.fandom.com/wiki/Rache_Bartmoss'_Guide_to_the_Net"
   },
+  "Raffen Shiv": {
+    "pageid": 6917,
+    "revid": 291832,
+    "timestamp": "2026-04-18T21:41:21Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Raffen_Shiv"
+  },
   "Rancho Coronado (2020)": {
     "pageid": 8921,
     "revid": 294191,
@@ -3649,6 +3726,18 @@
     "revid": 289746,
     "timestamp": "2026-03-15T01:54:10Z",
     "url": "https://cyberpunk.fandom.com/wiki/Rio_de_Janeiro"
+  },
+  "Ripperdoc": {
+    "pageid": 3476,
+    "revid": 302063,
+    "timestamp": "2026-07-21T16:45:49Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Ripperdoc"
+  },
+  "River Ward": {
+    "pageid": 10896,
+    "revid": 304758,
+    "timestamp": "2026-09-30T18:57:54Z",
+    "url": "https://cyberpunk.fandom.com/wiki/River_Ward"
   },
   "Robotics": {
     "pageid": 3475,
@@ -3783,11 +3872,23 @@
     "timestamp": "2026-02-18T08:09:09Z",
     "url": "https://cyberpunk.fandom.com/wiki/Saturn"
   },
+  "Saul Bright": {
+    "pageid": 8969,
+    "revid": 292116,
+    "timestamp": "2026-04-20T02:47:58Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Saul_Bright"
+  },
   "Sayonara Station, by Luke Steelman": {
     "pageid": 10686,
     "revid": 294567,
     "timestamp": "2026-05-06T06:45:05Z",
     "url": "https://cyberpunk.fandom.com/wiki/Sayonara_Station%2C_by_Luke_Steelman"
+  },
+  "Scavengers": {
+    "pageid": 3723,
+    "revid": 304833,
+    "timestamp": "2026-10-03T19:14:33Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Scavengers"
   },
   "Seattle": {
     "pageid": 17353,
@@ -3819,6 +3920,12 @@
     "revid": 275746,
     "timestamp": "2026-02-18T07:53:14Z",
     "url": "https://cyberpunk.fandom.com/wiki/Second_Corporate_War"
+  },
+  "Secure Services Inc.": {
+    "pageid": 13059,
+    "revid": 285689,
+    "timestamp": "2026-02-21T12:35:40Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Secure_Services_Inc."
   },
   "Seven Hour War": {
     "pageid": 11779,
@@ -4182,6 +4289,12 @@
     "timestamp": "2026-07-22T11:20:17Z",
     "url": "https://cyberpunk.fandom.com/wiki/The_Heist"
   },
+  "The Information": {
+    "pageid": 11572,
+    "revid": 294170,
+    "timestamp": "2026-05-03T16:30:20Z",
+    "url": "https://cyberpunk.fandom.com/wiki/The_Information"
+  },
   "The Island": {
     "pageid": 40973,
     "revid": 293876,
@@ -4321,8 +4434,7 @@
     "pageid": 7072,
     "revid": 301724,
     "timestamp": "2026-07-18T22:42:49Z",
-    "url": "https://cyberpunk.fandom.com/wiki/Totentanz",
-    "redirectFrom": "Totentanz (Watson)"
+    "url": "https://cyberpunk.fandom.com/wiki/Totentanz"
   },
   "Tower of Dark": {
     "pageid": 27089,
@@ -4335,6 +4447,12 @@
     "revid": 304295,
     "timestamp": "2026-09-15T00:49:08Z",
     "url": "https://cyberpunk.fandom.com/wiki/Trace_Santiago"
+  },
+  "Transmission": {
+    "pageid": 12080,
+    "revid": 303236,
+    "timestamp": "2026-08-08T09:09:49Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Transmission"
   },
   "Trauma Deck": {
     "pageid": 39567,
@@ -4480,6 +4598,12 @@
     "timestamp": "2026-04-23T19:20:31Z",
     "url": "https://cyberpunk.fandom.com/wiki/Upscale_Brownstones"
   },
+  "Us Cracks": {
+    "pageid": 9543,
+    "revid": 277859,
+    "timestamp": "2026-02-19T08:40:40Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Us_Cracks"
+  },
   "Utah": {
     "pageid": 9208,
     "revid": 277760,
@@ -4504,6 +4628,12 @@
     "revid": 297885,
     "timestamp": "2026-06-07T20:40:57Z",
     "url": "https://cyberpunk.fandom.com/wiki/Valentinos"
+  },
+  "Viktor Vektor": {
+    "pageid": 2998,
+    "revid": 275623,
+    "timestamp": "2026-02-18T07:45:55Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Viktor_Vektor"
   },
   "Vista del Rey": {
     "pageid": 8959,
@@ -4656,6 +4786,12 @@
     "revid": 296044,
     "timestamp": "2026-05-19T20:39:37Z",
     "url": "https://cyberpunk.fandom.com/wiki/World_News_Service"
+  },
+  "Wraiths": {
+    "pageid": 5302,
+    "revid": 298056,
+    "timestamp": "2026-06-09T19:38:35Z",
+    "url": "https://cyberpunk.fandom.com/wiki/Wraiths"
   },
   "Wyoming": {
     "pageid": 9231,

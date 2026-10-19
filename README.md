@@ -1,12 +1,13 @@
-# Night City Lore
+# Cyberpunk Lore
 
 A mobile-first lore timeline and relevance map of the Cyberpunk world, made for friends who have watched **Cyberpunk: Edgerunners** but haven't played **Cyberpunk 2077**. Free, unofficial and non-commercial.
 
-- **Timeline view**: a vertical line of events from 1859 to 2095, virtualized so hundreds of events scroll smoothly, with a sticky era header and an era scrubber on the right.
-- **Map view**: events grouped into themed clusters with typed links (caused, led to, part of, involves). Pinch, pan, and tap clusters to open them.
-- **Detail levels**: Key (landmarks), + Major, All. Pinch on the timeline or zoom in on the map to reveal more.
-- **Spoiler safety**: 2077 and Phantom Liberty plot events are blurred until tapped ("Safe" mode is on by default).
-- Search, filters (theme, era, canon source, spoiler level), a 15-step **Start here** path, and a "viewed" marker stored in the browser.
+- **Timeline view**: a horizontal line from 1859 to 2095. Drag to move, pinch or scroll to zoom. Detail follows zoom: landmarks first, then major and minor events, and cards grow from compact to full (with the wiki image) as space allows. Every card shows all its tags.
+- **Map view**: every theme cluster is open, with related events bundled into groups (Arasaka, Militech, Johnny Silverhand, Nomads...). Tap a group to open it. Links are merged between whatever is on screen, so closed groups carry one line per neighbour.
+- **Tags**: theme (with icon), importance, spoiler level, and the media each subject appears in (Tabletop, 2077, Phantom Liberty, Edgerunners), derived from the wiki's own page metadata.
+- **Images**: each event's lead image from its wiki page, hot-linked from the wiki with a credit link, and switchable off in Filters.
+- **Spoiler safety**: 2077 and Phantom Liberty plot events are blurred until tapped; the eye button toggles this.
+- Search, filters (theme, era, media, spoiler level), a 15-step **Start here** path, and a "viewed" marker stored in the browser.
 
 ## Run it
 
@@ -60,11 +61,10 @@ scripts/
   era: "the-2070s",                   // must match the year range in data/eras.ts
   cluster: "governments",             // see data/clusters.ts
   tier: "major",                      // landmark | major | minor
-  canonSource: "2077",                // 2077 | edgerunners | tabletop | multiple
+  canonSource: "2077",                // primary source: 2077 | edgerunners | tabletop | multiple
   summary: "2 to 4 sentences.",
   whyItMatters: "One or two sentences.",
   spoilerLevel: "world",              // edgerunners-safe | world | game-spoiler
-  edgerunnersTie: "Optional callout.",
   related: [{ id: "unification-war", relation: "part-of" }],
   wikiUrl: w("Unification War", "Late war"),
   conflictNote: "Optional: where wiki pages or canons disagree.",
@@ -73,8 +73,9 @@ scripts/
 
 `related` describes how the linked event relates to this one: `caused` (it caused this), `led-to` (this led to it), `part-of` (this is part of it), `involves` (a looser link). Links only need to be written on one side; the app shows both directions.
 
-3. Run `npm run validate`. It fails on missing fields, bad enum values, non-wiki URLs, duplicate ids and dangling `related` ids, and warns when an event's era doesn't match its year.
-4. Run `npm run sources` to refresh `data/sources.md`.
+3. Optionally add the event to a map group in `data/groups.ts` (all members of a group must share a cluster).
+4. Run `npm run wiki:meta` to refresh media tags and images, then `npm run validate`. It fails on missing fields, bad enum values, non-wiki URLs, duplicate ids and dangling `related` ids, and warns when an event's era doesn't match its year.
+5. Run `npm run sources` to refresh `data/sources.md`.
 
 **Tier rules.** Landmark: changes the state of the world or anchors a game or series (about 3 to 6 per era). Major: has its own wiki article and shifts a faction, city or technology. Minor: world-building detail.
 
@@ -84,6 +85,7 @@ scripts/
 npm run wiki:fetch                 # seeds + every page they link to, into data/raw/pages/
 npm run wiki:fetch -- "Night City" "Adam Smasher"   # fetch specific extra pages
 npm run wiki:extract               # timeline pages -> data/raw/timeline-candidates.json
+npm run wiki:meta                  # media tags + lead images -> data/generated/wiki-meta.json (commit it)
 node scripts/context.mjs 2070 2079             # candidates for a year range, with linked page leads
 node scripts/context.mjs --page "Dogtown" --grep 2070   # paragraphs of one page
 ```
@@ -102,6 +104,6 @@ Writing events is a reading-and-paraphrasing step, not an automatic one: the scr
 
 ## Attribution and licensing
 
-Event text is adapted from the [Cyberpunk Wiki](https://cyberpunk.fandom.com/) on Fandom, licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). Every event links to its source page. The event data in `data/events/` is shared under the same CC BY-SA 3.0 license; the application code is MIT.
+Event text is adapted from the [Cyberpunk Wiki](https://cyberpunk.fandom.com/) on Fandom, licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). Every event links to its source page. Images are not part of that license: they are loaded directly from the wiki's servers (not stored in this repo), credited and linked to their file pages, and remain the property of their owners (mostly CD Projekt Red, R. Talsorian Games and Netflix). The event data in `data/events/` is shared under the same CC BY-SA 3.0 license; the application code is MIT.
 
 Cyberpunk, Cyberpunk 2077, Cyberpunk: Edgerunners and related names are trademarks of CD Projekt S.A., R. Talsorian Games and/or Netflix. This project is not affiliated with or endorsed by them.

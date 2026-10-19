@@ -1,4 +1,6 @@
-import type { LoreEvent } from "./types";
+import type { Event, LoreEvent } from "./types";
+import meta from "./generated/wiki-meta.json";
+import { groupOf } from "./groups";
 import { divergence } from "./events/divergence";
 import { collapse } from "./events/collapse";
 import { corporateWars } from "./events/corporate-wars";
@@ -11,10 +13,10 @@ import { beyond } from "./events/beyond";
 export { eras, eraById, eraForYear } from "./eras";
 export { clusters, clusterById } from "./clusters";
 export { startHere } from "./start-here";
+export { groups, groupById, groupOf } from "./groups";
 export * from "./types";
 
-/** Every event, sorted chronologically. */
-export const events: LoreEvent[] = [
+const raw: LoreEvent[] = [
   ...divergence,
   ...collapse,
   ...corporateWars,
@@ -23,6 +25,13 @@ export const events: LoreEvent[] = [
   ...reunification,
   ...the2070s,
   ...beyond,
-].sort((a, b) => a.sortYear - b.sortYear);
+];
 
-export const eventById: Record<string, LoreEvent> = Object.fromEntries(events.map((e) => [e.id, e]));
+const META = meta as Record<string, { media: Event["media"]; image?: Event["image"] }>;
+
+/** Every event, sorted chronologically, with media tags, image and map group. */
+export const events: Event[] = raw
+  .map((e) => ({ ...e, media: META[e.id]?.media ?? [], image: META[e.id]?.image, group: groupOf[e.id] }))
+  .sort((a, b) => a.sortYear - b.sortYear);
+
+export const eventById: Record<string, Event> = Object.fromEntries(events.map((e) => [e.id, e]));

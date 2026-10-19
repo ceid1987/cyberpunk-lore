@@ -2,9 +2,9 @@
 
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { useEffect, useMemo, useRef } from "react";
-import { clusterById, eventById, startHere, type LoreEvent, type Relation } from "@/data";
-import { useIsHidden, useStore, useVisibleEvents, usePrefersReducedMotion } from "@/lib/store";
-import { CanonBadge, ClusterChip, Icon, SpoilerBadge, TIER_LABEL, Badge } from "./ui";
+import { clusterById, eventById, startHere, type Event, type Relation } from "@/data";
+import { useFilteredEvents, useIsHidden, useStore, usePrefersReducedMotion } from "@/lib/store";
+import { Icon, TagRow } from "./ui";
 
 const REL_LABEL: Record<Relation, string> = { caused: "Caused by", "led-to": "Led to", "part-of": "Part of", involves: "Involves" };
 const REL_ORDER: Relation[] = ["caused", "part-of", "led-to", "involves"];
@@ -14,7 +14,7 @@ export default function EventSheet() {
   const e = state.selectedId ? eventById[state.selectedId] : null;
   const reduced = usePrefersReducedMotion();
   const controls = useDragControls();
-  const visible = useVisibleEvents();
+  const visible = useFilteredEvents();
   const isHidden = useIsHidden();
 
   // Navigation order: the events currently on screen, chronologically. Fall back to all
@@ -28,7 +28,7 @@ export default function EventSheet() {
   const pathPrev = inPath && state.pathIndex! > 0 ? startHere[state.pathIndex! - 1] : null;
   const pathNext = inPath && state.pathIndex! < startHere.length - 1 ? startHere[state.pathIndex! + 1] : null;
 
-  const go = (target: LoreEvent | null) => target && dispatch({ type: "select", id: target.id });
+  const go = (target: Event | null) => target && dispatch({ type: "select", id: target.id });
   const close = () => dispatch({ type: "select", id: null });
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export default function EventSheet() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="sheet-title"
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[86dvh] max-w-xl flex-col rounded-t-xl border border-b-0 border-line bg-bg-2 shadow-[0_-12px_40px_rgba(0,0,0,0.6)]"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[86dvh] max-w-xl flex-col border border-b-0 border-line bg-bg-2 shadow-[0_-12px_40px_rgba(0,0,0,0.6)]"
             style={{ borderTop: `2px solid ${c.color}` }}
             initial={reduced ? { opacity: 0 } : { y: "100%" }}
             animate={reduced ? { opacity: 1 } : { y: 0 }}
@@ -124,7 +124,7 @@ export default function EventSheet() {
               </div>
             )}
 
-            <div ref={contentRef} tabIndex={-1} className="flex-1 overflow-y-auto overscroll-contain px-5 pb-4 outline-none" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+            <div ref={contentRef} tabIndex={-1} className="cp-scroll flex-1 overflow-y-auto overscroll-contain px-5 pb-4 outline-none" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
               <div className="flex items-start gap-3 pt-1">
                 <div className="flex-1">
                   <div className="font-display text-[13px] uppercase tracking-[0.14em]" style={{ color: c.color }}>
@@ -139,12 +139,23 @@ export default function EventSheet() {
                 </button>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                <ClusterChip id={e.cluster} />
-                <Badge color={e.tier === "landmark" ? "#fcee0a" : e.tier === "major" ? "#05d9e8" : "#a9a9c0"}>{TIER_LABEL[e.tier]}</Badge>
-                <CanonBadge canon={e.canonSource} />
-                <SpoilerBadge level={e.spoilerLevel} />
+              <div className="mt-3">
+                <TagRow e={e} hidden={spoilerGate} />
               </div>
+
+              {!spoilerGate && state.showImages && e.image && (
+                <figure className="mt-4 overflow-hidden border border-line bg-panel">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={e.image.thumb} alt={`Illustration for ${e.title}`} loading="lazy" referrerPolicy="no-referrer" className="max-h-56 w-full object-cover" onError={(ev) => ((ev.currentTarget.parentElement as HTMLElement).style.display = "none")} />
+                  <figcaption className="px-2 py-1 text-[11px] text-ink-3">
+                    Image:{" "}
+                    <a href={e.image.page} target="_blank" rel="noopener noreferrer" className="underline hover:text-ink-2">
+                      Cyberpunk Wiki
+                    </a>{" "}
+                    · © its respective owners
+                  </figcaption>
+                </figure>
+              )}
 
               {spoilerGate ? (
                 <div className="mt-6 rounded-md border border-magenta/50 bg-magenta/5 p-4 text-center">
@@ -161,13 +172,6 @@ export default function EventSheet() {
                     <div className="font-display text-[11px] uppercase tracking-[0.18em] text-ink-3">Why it matters</div>
                     <p className="mt-1 text-[14.5px] leading-relaxed text-ink-2">{e.whyItMatters}</p>
                   </div>
-
-                  {e.edgerunnersTie && (
-                    <div className="mt-4 rounded-md border border-[#c8ff2e]/50 bg-[#c8ff2e]/[0.06] p-3">
-                      <div className="font-display text-[11px] uppercase tracking-[0.18em] text-[#c8ff2e]">You saw this in Edgerunners</div>
-                      <p className="mt-1 text-[14.5px] leading-snug text-ink">{e.edgerunnersTie}</p>
-                    </div>
-                  )}
 
                   {e.conflictNote && (
                     <div className="mt-4 rounded-md border border-yellow/40 bg-yellow/[0.05] p-3">
@@ -231,7 +235,7 @@ export default function EventSheet() {
               ) : (
                 <>
                   <NavBtn label={prev ? `Previous: ${prev.title}` : "Previous"} disabled={!prev} onClick={() => go(prev)} dir="L" />
-                  <span className="flex-1 text-center font-display text-[11px] uppercase tracking-wider text-ink-3">Swipe for prev / next</span>
+                  <span className="flex-1 text-center font-display text-[11px] uppercase tracking-wider text-ink-3">{e.inWorldDate}</span>
                   <NavBtn label={next ? `Next: ${next.title}` : "Next"} disabled={!next} onClick={() => go(next)} dir="R" />
                 </>
               )}

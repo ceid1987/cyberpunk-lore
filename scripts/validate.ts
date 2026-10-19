@@ -7,7 +7,7 @@
 //
 //   npm run validate
 
-import { events, eras, clusters, startHere } from "../data";
+import { events, eras, clusters, startHere, groups } from "../data";
 import type { LoreEvent } from "../data/types";
 import { eraForYear } from "../data/eras";
 
@@ -54,6 +54,19 @@ for (const e of events) {
   }
 }
 for (const s of startHere) if (!ids.has(s.id)) errors.push(`[start-here] unknown id "${s.id}"`);
+const seenInGroup = new Map<string, string>();
+for (const g of groups) {
+  const cl = new Set<string>();
+  for (const m of g.members) {
+    const ev = events.find((e) => e.id === m);
+    if (!ev) errors.push(`[group ${g.id}] unknown member "${m}"`);
+    else cl.add(ev.cluster);
+    if (seenInGroup.has(m)) errors.push(`[group ${g.id}] "${m}" already in group ${seenInGroup.get(m)}`);
+    seenInGroup.set(m, g.id);
+  }
+  if (cl.size > 1) errors.push(`[group ${g.id}] members span clusters: ${[...cl].join(", ")}`);
+}
+for (const e of events) if (!e.media.length) warnings.push(`[${e.id}] no media tags (run npm run wiki:meta)`);
 
 const count = (k: keyof LoreEvent) => events.reduce<Record<string, number>>((a, e) => ((a[String(e[k])] = (a[String(e[k])] ?? 0) + 1), a), {});
 console.log(`events: ${events.length}`);

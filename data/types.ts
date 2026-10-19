@@ -28,6 +28,9 @@ export type Tier = "landmark" | "major" | "minor";
 
 export type CanonSource = "2077" | "edgerunners" | "tabletop" | "multiple";
 
+/** Media an event's subject appears in. Derived by scripts/wiki-meta.ts. */
+export type Media = "tabletop" | "2077" | "phantom-liberty" | "edgerunners";
+
 export type SpoilerLevel = "edgerunners-safe" | "world" | "game-spoiler";
 
 export type Relation = "caused" | "led-to" | "part-of" | "involves";
@@ -60,13 +63,18 @@ export interface LoreEvent {
   summary: string;
   whyItMatters: string;
   spoilerLevel: SpoilerLevel;
-  /** Short "You saw this in Edgerunners" callout text */
-  edgerunnersTie?: string;
   related: RelatedLink[];
   /** Full https://cyberpunk.fandom.com/wiki/... URL of the page this event is sourced from */
   wikiUrl: string;
   /** Present when the wiki is ambiguous or tabletop and 2077 canon disagree */
   conflictNote?: string;
+}
+
+/** An event with build-time extras merged in (see data/index.ts). */
+export interface Event extends LoreEvent {
+  media: Media[];
+  group?: string;
+  image?: { thumb: string; file: string; page: string };
 }
 
 export interface Era {
