@@ -139,7 +139,7 @@ function Shell() {
 
   const museum = shown === "museum";
   const mLayout = museumLayout(main.w, main.h, state.museumPanes);
-  const mapOn = shown === "graph" || (museum && !!mLayout.map);
+  const mapOn = shown === "graph" || (museum && !!mLayout.map && state.museum.index >= 0);
   const mapBox: React.CSSProperties = museum && mLayout.map ? { left: mLayout.map.x, top: mLayout.map.y, width: mLayout.map.w, height: mLayout.map.h } : { inset: 0 };
   const topH = state.immersive ? "0px" : "calc(56px + env(safe-area-inset-top))";
 
@@ -159,12 +159,10 @@ function Shell() {
           </div>
         )}
 
-        {/* search, filters, fullscreen (the museum has them in its header) */}
-        {!museum && (
-          <div className="absolute right-2 z-20" style={{ bottom: inset.bottom ? inset.bottom + 12 : 84 }}>
-            <Tools />
-          </div>
-        )}
+        {/* search, filters, fullscreen: same place in every view */}
+        <div className="absolute right-2 z-30" style={{ bottom: inset.bottom ? inset.bottom + 12 : 84 }}>
+          <Tools />
+        </div>
 
         {/* view switch */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center pb-3" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>

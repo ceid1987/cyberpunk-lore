@@ -28,8 +28,8 @@ export interface State {
   viewed: string[];
   panel: null | "search" | "filters" | "start" | "about";
   pathIndex: number | null; // position in Start Here path while following it
-  /** Museum: index into the chronological event list (-1 = not started). `active` mirrors view === "museum". */
-  museum: { active: boolean; index: number };
+  /** Museum: index into the chronological event list (-1 = not started), and the furthest event seen. `active` mirrors view === "museum". */
+  museum: { active: boolean; index: number; max: number };
   museumPanes: Record<MuseumPane, boolean>;
 }
 
@@ -61,7 +61,7 @@ const initial: State = {
   viewed: [],
   panel: null,
   pathIndex: null,
-  museum: { active: false, index: -1 },
+  museum: { active: false, index: -1, max: -1 },
   museumPanes: { card: true, timeline: true, map: true },
 };
 
@@ -92,7 +92,7 @@ function reducer(s: State, a: Action): State {
     case "panel":
       return { ...s, panel: a.panel };
     case "museum":
-      return { ...s, museum: { ...s.museum, index: a.index } };
+      return { ...s, museum: { ...s.museum, index: a.index, max: Math.max(s.museum.max, a.index) } };
     case "hydrate":
       return { ...s, viewed: a.viewed, spoilerFree: a.spoilerFree, showImages: a.showImages };
   }

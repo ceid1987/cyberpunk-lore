@@ -3,13 +3,13 @@
 A mobile-first lore timeline and relevance map of the Cyberpunk world, made for friends who have watched **Cyberpunk: Edgerunners** but haven't played **Cyberpunk 2077**. Free, unofficial and non-commercial.
 
 - **Timeline view**: a horizontal white line from 1859 to 2095. It opens zoomed out with every event as a dot and no cards. Zooming in (pinch, scroll, or `+` / `-`, `0` to reset) brings in cards by importance: landmarks, then major, then minor events. Compact cards show date, theme and title; zoomed in further they become full cards with the wiki image and all tags. Cards are packed in world space, so panning or opening an event never moves them.
-- **Museum view**: steps through every event in date order with `>` (or the arrow keys). Three panes side by side: the event card, a slim timeline of points and short labels, and the map. Each pane can be switched off. The new point pops in on the timeline, the map node arrives with a pulse, and links to events already shown draw from the older event to the new one in both panes.
+- **Museum view**: opens on a single Start button, then steps through every event in date order with `>` / `<` (centred above the view switch, or the arrow keys). Three panes side by side: the event card, a slim timeline and the map; the Card / Timeline / Map buttons in its header switch each pane on or off. Tap any point on the slim timeline to go back to that event; "Jump to present" returns to the furthest event reached. The new point pops in, the map node arrives with a pulse, and links to events already shown draw from the older event to the new one.
 - **Map view**: every theme starts closed as one bubble. Tap a theme to open it: its groups (Arasaka, Militech, Johnny Silverhand, Nomads...) and loose events spring out of the bubble. Tap a group to open it the same way.
 - **Detail panel**: tapping an event opens it docked on the left on desktop, or as a bottom sheet on mobile that peeks and can be pulled up. Nothing behind it is blurred. Date, theme, close button, title and tags stay pinned while the text scrolls.
 - **Spoiler-free filter**: choose any mix of Edgerunners, Cyberpunk 2077 and Phantom Liberty. Only events that spoil that story are blurred (tap to reveal); lore that merely appears in a work stays visible, so Arasaka is not an Edgerunners spoiler but David's last stand is. Each event's spoiler scope is derived in `data/index.ts` (`spoils`).
 - **Tags**: importance, Lore or "<work> Spoiler", and the media each subject appears in (Tabletop, 2077, Phantom Liberty, Edgerunners), from the wiki's own page metadata.
 - **Fullscreen**: hides the title bar (and uses browser fullscreen where available).
-- Search and filters (theme, era, media, spoiler-free, images) sit by the fullscreen button. A "viewed" marker is stored in the browser.
+- Search, filters (theme, era, media, spoiler-free, images) and fullscreen sit in the same corner in every view. A "viewed" marker is stored in the browser.
 
 ## Run it
 

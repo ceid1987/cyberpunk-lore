@@ -742,7 +742,7 @@ const GraphView = forwardRef<GraphHandle, { hidden?: boolean }>(function GraphVi
     const box = { x0: Math.min(...pts.map((p) => p[0])) - pad, y0: Math.min(...pts.map((p) => p[1])) - pad, x1: Math.max(...pts.map((p) => p[0])) + pad, y1: Math.max(...pts.map((p) => p[1])) + pad };
     // The museum map is its own pane: only the floating view switch (desktop) overlaps it.
     const desktop = window.innerWidth >= 768;
-    const target = boxTarget(box, fitK.current * 0.9, fitK.current * 4.5, { top: 34, bottom: desktop ? 96 : 24, side: desktop ? 60 : 36, focus: [x, y] });
+    const target = boxTarget(box, fitK.current * 0.9, fitK.current * 4.5, { top: 34, bottom: desktop ? 150 : 40, side: desktop ? 70 : 60, focus: [x, y] });
     animateTo(target, 0.8);
     ensureLoop();
     // wait for the panel inset to settle (panel opens on first step)
