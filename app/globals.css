@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #07070b;
+  --color-bg-2: #0e0e16;
+  --color-panel: #12121c;
+  --color-line: #262636;
+  --color-ink: #e9e9f2;
+  --color-ink-2: #a9a9c0;
+  --color-ink-3: #74748c;
+  --color-cyan: #05d9e8;
+  --color-magenta: #ff2a6d;
+  --color-yellow: #fcee0a;
+  --font-display: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* Subtle CRT scanlines, fixed and non-interactive. */
+.scanlines::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 3px);
+  mix-blend-mode: overlay;
+}
+
+/* Glitch text used sparingly on the logo and era headers. */
+.glitch {
+  position: relative;
+}
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.glitch:hover::before,
+.glitch.is-glitching::before {
+  opacity: 0.8;
+  color: var(--color-magenta);
+  transform: translate(-1.5px, 0);
+  clip-path: inset(10% 0 55% 0);
+  animation: glitch-a 0.35s steps(2) 1;
+}
+.glitch:hover::after,
+.glitch.is-glitching::after {
+  opacity: 0.8;
+  color: var(--color-cyan);
+  transform: translate(1.5px, 0);
+  clip-path: inset(55% 0 8% 0);
+  animation: glitch-b 0.35s steps(2) 1;
+}
+@keyframes glitch-a {
+  50% { transform: translate(2px, -1px); }
+}
+@keyframes glitch-b {
+  50% { transform: translate(-2px, 1px); }
+}
+
+.spoiler-blur {
+  filter: blur(7px);
+  user-select: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+  .scanlines::after {
+    display: none;
+  }
+}

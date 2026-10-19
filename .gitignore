@@ -1,0 +1,8 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+# raw wiki dumps are large; keep the manifest only
+data/raw/pages/
